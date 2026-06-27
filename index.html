@@ -2074,7 +2074,7 @@ window.addEventListener('beforeunload',()=>{ try{setMyPresence('offline')}catch{
 
 
 <!-- =========================
-     PATCH v2.0.3 — Chart guard, registro fermo, permessi stabili
+     PATCH v2.0.4 — Chart guard, registro fermo, permessi stabili
 ========================= -->
 <style id="sc-v2-0-3-style">
   #v2Log{max-height:none!important;overflow:visible!important;padding-right:0!important;}
@@ -2121,8 +2121,8 @@ window.addEventListener('beforeunload',()=>{ try{setMyPresence('offline')}catch{
     try{ oldRender && oldRender(); }catch(e){ console.warn('renderV2 protetto:', e); }
     renderStableRoles();
     renderStableLog();
-    const f=document.querySelector('.build-footer'); if(f) f.innerHTML='<strong>Schoolcraft Roleplay 2</strong>&nbsp;·&nbsp;Centro Operativo&nbsp;·&nbsp;v2.0.3';
-    const bt=document.getElementById('buildTag'); if(bt) bt.textContent='Schoolcraft Roleplay 2 · Centro Operativo · v2.0.3';
+    const f=document.querySelector('.build-footer'); if(f) f.innerHTML='<strong>Schoolcraft Roleplay 2</strong>&nbsp;·&nbsp;Centro Operativo&nbsp;·&nbsp;v2.0.4';
+    const bt=document.getElementById('buildTag'); if(bt) bt.textContent='Schoolcraft Roleplay 2 · Centro Operativo · v2.0.4';
   };
   // Evita che il registro si riempia da solo al caricamento pagina.
   document.addEventListener('DOMContentLoaded',()=>{
@@ -2141,3 +2141,156 @@ window.addEventListener('beforeunload',()=>{ try{setMyPresence('offline')}catch{
 
 </body>
 </html>
+
+
+<!-- =========================
+     PATCH v2.0.4 — fix Owner dashboard permissions/sidebar
+========================= -->
+<style id="sc-v2-0-4-style">
+  #view-dashboard aside{overflow-y:auto!important;overflow-x:hidden!important;}
+  #dashNav{display:flex!important;flex-direction:column!important;gap:6px!important;min-height:220px!important;visibility:visible!important;opacity:1!important;}
+  #dashNav a{display:flex!important;align-items:center!important;gap:11px!important;width:100%!important;min-height:38px!important;}
+  #view-dashboard main{min-width:0!important;width:100%!important;}
+  .build-footer{font-size:10.5px!important;}
+</style>
+<script id="sc-v2-0-4-script">
+(function(){
+  const VERSION='v2.0.4';
+  const PERM_TO_ROLE={Owner:'founder',Founder:'founder',Admin:'admin',Staff:'staff',Moderatore:'staff',Membro:'membro',owner:'founder',founder:'founder',admin:'admin',staff:'staff',moderatore:'staff',membro:'membro'};
+  const ROLE_TO_LABEL={founder:'Owner',admin:'Admin',staff:'Staff',membro:'Membro'};
+  const ALL_PANELS=['panoramica','appello','membri','dashcal','promemoria','valutazioni','statistiche','gestruoli','impostazioni','stanze'];
+  const PANEL_ORDER=['panoramica','appello','membri','dashcal','promemoria','valutazioni','statistiche','gestruoli','stanze','impostazioni'];
+
+  function readJSON(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch{return f}}
+  function writeJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+  function clean(s){return String(s||'').trim()}
+  function esc2(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+  function getSavedUser(){return readJSON('sc_v2_user',readJSON('sc_v2_current_user',{name:'',permission:'Owner'}))||{name:'',permission:'Owner'}}
+  function saveSavedUser(u){writeJSON('sc_v2_user',u);writeJSON('sc_v2_current_user',u);try{localStorage.setItem('sc2_operator_name',u.name||'Operatore')}catch{}}
+  function effectiveRole(){
+    const u=getSavedUser();
+    const r=PERM_TO_ROLE[u.permission] || PERM_TO_ROLE[window.currentRole] || (typeof currentRole!=='undefined' && currentRole) || 'membro';
+    try{ currentRole=r; }catch{}
+    window.currentRole=r;
+    return r;
+  }
+  function effectivePermission(){
+    const u=getSavedUser();
+    return u.permission || ROLE_TO_LABEL[effectiveRole()] || 'Membro';
+  }
+  function canSee(panel, role){
+    role=role||effectiveRole();
+    if(role==='founder') return true;
+    const map={
+      admin:['panoramica','appello','membri','dashcal','promemoria','valutazioni','statistiche','gestruoli','stanze','impostazioni'],
+      staff:['panoramica','appello','membri','dashcal','promemoria','valutazioni','statistiche','stanze','impostazioni'],
+      membro:['panoramica','membri','dashcal','promemoria','valutazioni','stanze','impostazioni']
+    };
+    try{ if(typeof ROLE_PERMS!=='undefined' && ROLE_PERMS[panel] && ROLE_PERMS[panel].includes(role)) return true; }catch{}
+    return (map[role]||[]).includes(panel);
+  }
+  function patchPermissions(){
+    try{ ROLE_LABEL.founder='Owner'; ROLE_LABEL.admin='Admin'; ROLE_LABEL.staff='Staff'; ROLE_LABEL.membro='Membro'; }catch{}
+    try{ ALL_PANELS.forEach(p=>{ ROLE_PERMS[p]=Array.from(new Set([...(ROLE_PERMS[p]||[]),'founder'])); }); }catch{}
+  }
+  function updateHeaderRole(){
+    const role=effectiveRole(), perm=effectivePermission(), u=getSavedUser();
+    const badge=document.getElementById('roleBadge');
+    if(badge){badge.textContent=perm.toUpperCase(); badge.style.color = (typeof ROLE_COLORS!=='undefined' && ROLE_COLORS[role]) || 'var(--ice-400)';}
+    const chip=document.getElementById('dashboardOperatorChip');
+    if(chip){
+      const n=chip.querySelector('.operator-name'); if(n) n.textContent=u.name||'Operatore';
+      const r=chip.querySelector('.operator-role'); if(r) r.innerHTML=`${esc2(perm)} · Online`;
+      const a=chip.querySelector('.operator-avatar'); if(a) a.textContent=(u.name||'OP').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
+    }
+  }
+  window.buildDashNav=function(){
+    patchPermissions();
+    const nav=document.getElementById('dashNav'); if(!nav) return;
+    const role=effectiveRole();
+    nav.innerHTML='';
+    PANEL_ORDER.forEach(key=>{
+      const label=(typeof PANEL_LABEL!=='undefined' && PANEL_LABEL[key]) || ({stanze:'Stanze'}[key]) || key;
+      const icon=(typeof PANEL_ICON!=='undefined' && PANEL_ICON[key]) || '•';
+      if(!canSee(key,role)) return;
+      const a=document.createElement('a');
+      a.href='javascript:void(0)'; a.dataset.panel=key; a.onclick=function(){window.switchPanel(key)};
+      a.style.cssText='display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:8px;font-size:14px;color:var(--text-dim);transition:all .15s;border-left:2px solid transparent;';
+      a.innerHTML=`<span class="mono" style="font-size:13px;width:16px;color:var(--ice-400);">${icon}</span>${label}`;
+      nav.appendChild(a);
+    });
+    if(!nav.children.length){
+      nav.innerHTML='<div class="card" style="padding:12px;font-size:12px;color:var(--text-dim);">Permessi non caricati. Premi Esci e rientra.</div>';
+    }
+    updateHeaderRole();
+  };
+  window.switchPanel=function(key){
+    patchPermissions(); effectiveRole();
+    if(!canSee(key)) key='panoramica';
+    document.querySelectorAll('.dash-panel').forEach(p=>p.style.display='none');
+    const panel=document.getElementById('panel-'+key); if(panel) panel.style.display='';
+    const title=document.getElementById('dashPanelTitle'); if(title) title.textContent=(typeof PANEL_LABEL!=='undefined' && PANEL_LABEL[key]) || key;
+    document.querySelectorAll('#dashNav a').forEach(a=>{const active=a.dataset.panel===key;a.style.background=active?'var(--surface-3)':'transparent';a.style.color=active?'var(--text)':'var(--text-dim)';a.style.borderLeft=active?'2px solid var(--ice-500)':'2px solid transparent';});
+    const mp=document.getElementById('memberProfile'); if(mp) mp.style.display='none';
+    try{ if(key==='panoramica'&&typeof renderOverview==='function')renderOverview(); }catch(e){console.warn(e)}
+    try{ if(key==='appello'&&typeof renderAppello==='function')renderAppello(); }catch(e){console.warn(e)}
+    try{ if(key==='membri'&&typeof renderMembri==='function')renderMembri(); }catch(e){console.warn(e)}
+    try{ if(key==='dashcal'&&typeof renderDashCal==='function')renderDashCal(); }catch(e){console.warn(e)}
+    try{ if(key==='promemoria'&&typeof renderAnnounce==='function')renderAnnounce(); }catch(e){console.warn(e)}
+    try{ if(key==='valutazioni'&&typeof renderEvalFeed==='function')renderEvalFeed(); }catch(e){console.warn(e)}
+    try{ if(key==='statistiche'&&typeof renderStats==='function')renderStats(); }catch(e){console.warn(e)}
+    try{ if(key==='gestruoli'&&typeof renderGestRuoli==='function')renderGestRuoli(); }catch(e){console.warn(e)}
+    try{ if(key==='stanze'&&typeof renderRooms==='function')renderRooms(); }catch(e){console.warn(e)}
+  };
+  window.login=function(roleOrPerm){
+    const perm = roleOrPerm==='founder' || roleOrPerm==='owner' ? 'Owner' : (ROLE_TO_LABEL[PERM_TO_ROLE[roleOrPerm]||roleOrPerm] || roleOrPerm || 'Membro');
+    let u=getSavedUser();
+    let name=clean(u.name)||clean(localStorage.getItem('sc2_operator_name'));
+    if(!name){ name=prompt('Inserisci il tuo nome per accedere:')||''; name=clean(name); }
+    if(!name){ alert('Devi inserire il nome per entrare.'); return; }
+    u={name,permission:perm,online:true,lastSeen:Date.now()}; saveSavedUser(u);
+    try{ currentRole=PERM_TO_ROLE[perm]||'membro'; }catch{}
+    window.currentRole=PERM_TO_ROLE[perm]||'membro';
+    try{ closeLogin(); }catch{}
+    const nl=document.getElementById('navLoginBtn'); if(nl) nl.style.display='none';
+    const nd=document.getElementById('navDashBtn'); if(nd) nd.style.display='inline-flex';
+    try{ showView('dashboard'); }catch{}
+    window.buildDashNav();
+    updateHeaderRole();
+    window.switchPanel('panoramica');
+    try{ toast('Accesso come '+perm); }catch{}
+  };
+  function patchLoginModal(){
+    const modal=document.getElementById('loginModal'); if(!modal) return;
+    const box=modal.querySelector('.card'); if(!box || document.getElementById('sc204Name')) return;
+    const p=box.querySelector('p'); if(p) p.textContent='Inserisci il tuo nome e scegli il permesso. Il ruolo mostrato in alto sarà quello reale.';
+    const btns=box.querySelector('div[style*="flex-direction:column"]');
+    if(btns){
+      btns.innerHTML=`
+        <input id="sc204Name" class="ops-input" placeholder="Il tuo nome" style="width:100%;margin-bottom:2px;">
+        <button class="btn btn-ghost" style="justify-content:space-between;" onclick="localStorage.setItem('sc2_operator_name',document.getElementById('sc204Name').value.trim());login('Owner')">Owner <span class="muted mono" style="font-size:11px;">accesso completo</span></button>
+        <button class="btn btn-ghost" style="justify-content:space-between;" onclick="localStorage.setItem('sc2_operator_name',document.getElementById('sc204Name').value.trim());login('Admin')">Admin <span class="muted mono" style="font-size:11px;">gestione team</span></button>
+        <button class="btn btn-ghost" style="justify-content:space-between;" onclick="localStorage.setItem('sc2_operator_name',document.getElementById('sc204Name').value.trim());login('Staff')">Staff <span class="muted mono" style="font-size:11px;">appello + membri</span></button>
+        <button class="btn btn-ghost" style="justify-content:space-between;" onclick="localStorage.setItem('sc2_operator_name',document.getElementById('sc204Name').value.trim());login('Moderatore')">Moderatore <span class="muted mono" style="font-size:11px;">controllo contenuti</span></button>
+        <button class="btn btn-ghost" style="justify-content:space-between;" onclick="localStorage.setItem('sc2_operator_name',document.getElementById('sc204Name').value.trim());login('Membro')">Membro <span class="muted mono" style="font-size:11px;">profilo personale</span></button>`;
+    }
+  }
+  const oldOpenLogin=window.openLogin;
+  window.openLogin=function(){ if(oldOpenLogin) oldOpenLogin(); setTimeout(()=>{patchLoginModal(); const n=document.getElementById('sc204Name'); if(n) n.value=getSavedUser().name||localStorage.getItem('sc2_operator_name')||'';},20); };
+  function fixFooter(){
+    document.querySelectorAll('.build-footer,.build-tag').forEach(f=>{f.innerHTML='<strong>Schoolcraft Roleplay 2</strong>&nbsp;·&nbsp;Centro Operativo&nbsp;·&nbsp;'+VERSION;});
+  }
+  function bootFix(){
+    patchPermissions(); patchLoginModal(); fixFooter();
+    const dash=document.getElementById('view-dashboard');
+    if(dash && dash.style.display!=='none'){
+      effectiveRole(); window.buildDashNav(); updateHeaderRole();
+      const visible=[...document.querySelectorAll('.dash-panel')].some(p=>p.style.display!=='none');
+      if(!visible || !document.getElementById('dashNav')?.children.length) window.switchPanel('panoramica');
+    }
+  }
+  document.addEventListener('DOMContentLoaded',bootFix);
+  setTimeout(bootFix,200);
+  setTimeout(bootFix,1000);
+})();
+</script>
