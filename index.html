@@ -1011,5 +1011,237 @@ window.addEventListener('DOMContentLoaded', ()=>{
   buildCalendar(calOffset,'calGrid','calMonthTitle', showEventDetail);
 });
 </script>
+
+
+<script>
+/* ============ UPGRADE PROFESSIONALE: storage, appelli, stanze, annunci immagini, suoni ============ */
+ROLE_PERMS.stanze = ['founder','admin','staff','membro'];
+PANEL_LABEL.stanze = 'Stanze';
+PANEL_ICON.stanze = '▣';
+
+const SC2_STORAGE_KEY = 'schoolcraft_roleplay_2_professional_data_v1';
+let attendanceSessions = [];
+let rooms = [
+  {id:1, name:'Attori', description:'Presenze e comunicazioni per il cast principale.', members: members.filter(m=>m.role.includes('Attori')).map(m=>m.id)},
+  {id:2, name:'Builder', description:'Organizzazione costruzioni, set e mappe.', members: members.filter(m=>m.role==='Builder').map(m=>m.id)},
+  {id:3, name:'Staff Operativo', description:'Riunioni, avvisi e controllo generale.', members: members.slice(0,6).map(m=>m.id)},
+];
+let soundEnabled = true;
+let absenceThreshold = 3;
+
+function safeHTML(value){
+  return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+}
+function saveProfessionalData(){
+  localStorage.setItem(SC2_STORAGE_KEY, JSON.stringify({members, announcements, attendanceSessions, rooms, soundEnabled, absenceThreshold}));
+}
+function loadProfessionalData(){
+  try{
+    const raw = localStorage.getItem(SC2_STORAGE_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(Array.isArray(data.members)) members = data.members;
+    if(Array.isArray(data.announcements)) announcements = data.announcements;
+    if(Array.isArray(data.attendanceSessions)) attendanceSessions = data.attendanceSessions;
+    if(Array.isArray(data.rooms)) rooms = data.rooms;
+    if(typeof data.soundEnabled === 'boolean') soundEnabled = data.soundEnabled;
+    if(Number.isFinite(+data.absenceThreshold)) absenceThreshold = +data.absenceThreshold;
+  }catch(e){ console.warn('Dati locali non caricati', e); }
+}
+function playUISound(type='ok'){
+  if(!soundEnabled) return;
+  try{
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const freq = type==='error'?160:type==='warn'?260:type==='notify'?620:460;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq*1.35, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.05, ctx.currentTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
+    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.18);
+  }catch(e){}
+}
+const originalToast = toast;
+toast = function(msg, kind){ originalToast(msg, kind); playUISound(kind==='warn'?'warn':kind==='error'?'error':'ok'); };
+
+function ensureProfessionalPanels(){
+  if(!document.getElementById('panel-stanze')){
+    const ref = document.getElementById('panel-valutazioni');
+    const panel = document.createElement('div');
+    panel.className = 'dash-panel';
+    panel.id = 'panel-stanze';
+    panel.style.display = 'none';
+    panel.innerHTML = `
+      <div class="card" style="margin-bottom:18px;">
+        <div style="display:flex; justify-content:space-between; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+          <div><div class="eyebrow">Stanze operative</div><p>Ogni stanza salva membri, presenze e storico collegato agli appelli.</p></div>
+          <button class="btn btn-primary btn-sm" onclick="addRoom()">+ Crea stanza</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1.4fr; gap:10px; margin-top:14px;">
+          <input id="roomName" placeholder="Nome stanza" class="mono" style="background:var(--surface-3); border:1px solid var(--border-strong); color:var(--text); padding:9px 12px; border-radius:8px; font-size:13px;">
+          <input id="roomDesc" placeholder="Descrizione" class="mono" style="background:var(--surface-3); border:1px solid var(--border-strong); color:var(--text); padding:9px 12px; border-radius:8px; font-size:13px;">
+        </div>
+      </div>
+      <div id="roomsGrid" style="display:grid; grid-template-columns:repeat(2,1fr); gap:14px;"></div>`;
+    ref.parentNode.insertBefore(panel, ref);
+  }
+  if(!document.getElementById('attendanceHistoryCard')){
+    const appello = document.getElementById('panel-appello');
+    appello.insertAdjacentHTML('beforeend', `<div id="attendanceHistoryCard" class="card" style="margin-top:18px;"><div class="eyebrow">Storico appelli salvati</div><div id="attendanceHistory" style="display:flex; flex-direction:column; gap:10px;"></div></div>`);
+  }
+  if(!document.getElementById('annImage')){
+    document.getElementById('annBody').insertAdjacentHTML('afterend', `<input id="annImage" placeholder="URL immagine annuncio opzionale" class="mono" style="width:100%; margin-top:10px; background:var(--surface-3); border:1px solid var(--border-strong); color:var(--text); padding:9px 12px; border-radius:8px; font-size:13px;"><label class="mono" style="display:flex; gap:8px; align-items:center; margin-top:10px; font-size:12px; color:var(--text-dim);"><input id="annPinned" type="checkbox"> Metti in evidenza</label>`);
+  }
+  if(!document.getElementById('professionalSettings')){
+    document.getElementById('panel-impostazioni').insertAdjacentHTML('beforeend', `
+      <div id="professionalSettings" class="card" style="margin-top:18px;">
+        <div class="eyebrow">Backup, suoni e dati locali</div>
+        <p style="margin-bottom:12px;">Il sito salva appelli, stanze e annunci nel browser. Per produzione vera si può poi collegare a Supabase/Firebase.</p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <button class="btn btn-primary btn-sm" onclick="exportAttendanceCSV()">Esporta presenze CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleSounds()" id="soundToggleBtn"></button>
+          <button class="btn btn-danger btn-sm" onclick="resetLocalData()">Reset dati locali</button>
+        </div>
+      </div>`);
+  }
+  const th = document.getElementById('thresholdRange');
+  if(th){ th.value = absenceThreshold; document.getElementById('thresholdVal').textContent = absenceThreshold; th.oninput = function(){ absenceThreshold=+this.value; document.getElementById('thresholdVal').textContent=this.value; saveProfessionalData(); renderStats(); }; }
+}
+
+function getMemberRate(m){ const total=(m.pres||0)+(m.abs||0)+(m.just||0); return total ? Math.round(((m.pres||0)+(m.just||0)*0.5)/total*100) : 0; }
+function renderAppello(){ ensureProfessionalPanels(); paintAppello(); renderAttendanceHistory(); }
+function paintAppello(){
+  const list = document.getElementById('appelloList');
+  const roomsOptions = [`<option value="all">Tutti i membri</option>`, ...rooms.map(r=>`<option value="${r.id}">Stanza: ${safeHTML(r.name)}</option>`)].join('');
+  if(!document.getElementById('appelloRoom')){
+    document.getElementById('appelloLabel').insertAdjacentHTML('afterend', `<select id="appelloRoom" class="mono" style="background:var(--surface-3); border:1px solid var(--border-strong); color:var(--text); padding:9px 12px; border-radius:8px; font-size:13px;">${roomsOptions}</select>`);
+  }else document.getElementById('appelloRoom').innerHTML = roomsOptions;
+  const roomVal = document.getElementById('appelloRoom')?.value || 'all';
+  const shown = roomVal==='all' ? members : members.filter(m => (rooms.find(r=>String(r.id)===roomVal)?.members || []).includes(m.id));
+  list.innerHTML = shown.map(m=>{
+    const state = appelloState[m.id] || 'neutro';
+    const rate = getMemberRate(m);
+    return `<div class="card" style="display:grid; grid-template-columns:1.2fr 110px 1fr; align-items:center; gap:14px; padding:14px 16px;">
+      <div><div style="font-weight:600;">${safeHTML(m.nick)}</div><div class="muted mono" style="font-size:11.5px;">${safeHTML(m.role)} · presenza ${rate}%</div></div>
+      <div style="height:6px; background:var(--surface-3); border-radius:99px; overflow:hidden;"><div style="height:100%; width:${rate}%; background:${rate<60?'var(--red)':rate<80?'var(--amber)':'var(--green)'};"></div></div>
+      <div style="display:flex; justify-content:flex-end; gap:6px; flex-wrap:wrap;">
+        ${btnState(m.id,'presente','Presente','var(--green)')}
+        ${btnState(m.id,'assente','Assente','var(--red)')}
+        ${btnState(m.id,'giustificato','Giust.','var(--amber)')}
+      </div>
+    </div>`;
+  }).join('') || `<div class="card"><p>Nessun membro in questa stanza.</p></div>`;
+}
+function setAppello(id, state){ appelloState[id]=state; paintAppello(); playUISound('notify'); }
+function markAll(state){
+  const roomVal = document.getElementById('appelloRoom')?.value || 'all';
+  const ids = roomVal==='all' ? members.map(m=>m.id) : (rooms.find(r=>String(r.id)===roomVal)?.members || []);
+  ids.forEach(id=>appelloState[id]=state); paintAppello();
+}
+function saveAppello(){
+  const label = document.getElementById('appelloLabel').value.trim() || 'Appello senza titolo';
+  const type = document.getElementById('appelloType').value;
+  const roomVal = document.getElementById('appelloRoom')?.value || 'all';
+  const ids = roomVal==='all' ? members.map(m=>m.id) : (rooms.find(r=>String(r.id)===roomVal)?.members || []);
+  const roomName = roomVal==='all' ? 'Tutti i membri' : (rooms.find(r=>String(r.id)===roomVal)?.name || 'Stanza');
+  let pres=0, abs=0, just=0;
+  const records = ids.map(id=>{
+    const m = members.find(x=>x.id===id); const st = appelloState[id] || 'assente';
+    if(st==='presente'){ m.pres=(m.pres||0)+1; pres++; m.history=(m.history||[]).slice(-9).concat(1); }
+    else if(st==='giustificato'){ m.just=(m.just||0)+1; just++; m.history=(m.history||[]).slice(-9).concat(0.5); }
+    else { m.abs=(m.abs||0)+1; abs++; m.history=(m.history||[]).slice(-9).concat(0); }
+    return {id, nick:m.nick, state:st};
+  });
+  attendanceSessions.unshift({id:Date.now(), label, type, roomId:roomVal, roomName, date:new Date().toLocaleString('it-IT'), pres, abs, just, total:ids.length, records});
+  resetAppello(); saveProfessionalData(); renderAttendanceHistory(); renderOverview();
+  if(document.getElementById('membriTbody')) renderMembri();
+  toast(`Appello salvato: ${pres}/${ids.length} presenti`);
+}
+function renderAttendanceHistory(){
+  const host = document.getElementById('attendanceHistory'); if(!host) return;
+  host.innerHTML = attendanceSessions.slice(0,8).map(s=>{
+    const perc = s.total ? Math.round((s.pres + s.just*.5)/s.total*100) : 0;
+    return `<div style="display:grid; grid-template-columns:1fr auto; gap:12px; border-bottom:1px solid var(--border); padding:10px 0;">
+      <div><div style="font-weight:600;">${safeHTML(s.label)} <span class="muted mono" style="font-size:11px;">${safeHTML(s.roomName)}</span></div><div class="muted mono" style="font-size:11.5px;">${safeHTML(s.type)} · ${safeHTML(s.date)}</div></div>
+      <div class="mono" style="text-align:right; color:${perc<60?'var(--red)':perc<80?'var(--amber)':'var(--green)'};">${perc}%<br><span class="muted" style="font-size:11px;">P ${s.pres} · A ${s.abs} · G ${s.just}</span></div>
+    </div>`;
+  }).join('') || '<p>Nessun appello salvato.</p>';
+}
+
+function renderAnnounce(){
+  ensureProfessionalPanels();
+  document.getElementById('btnNewAnnounce').style.display = ROLE_PERMS.appello.includes(currentRole) ? 'inline-flex' : 'none';
+  const list = [...announcements].sort((a,b)=> (b.pinned-a.pinned));
+  document.getElementById('announceList').innerHTML = list.map((a,i)=>`
+    <div class="card">
+      ${a.image?`<img src="${safeHTML(a.image)}" style="width:100%; max-height:260px; object-fit:cover; border-radius:12px; margin-bottom:14px; border:1px solid var(--border);" onerror="this.style.display='none'">`:''}
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+        <div><span class="mono" style="font-size:10.5px; color:var(--ice-400); border:1px solid var(--border-strong); padding:3px 8px; border-radius:6px;">${safeHTML(a.type).toUpperCase()}</span>${a.pinned?'<span class="mono" style="font-size:10.5px; color:var(--amber); margin-left:6px;">★ in evidenza</span>':''}<h3 style="font-size:16px; margin-top:10px;">${safeHTML(a.title)}</h3></div>
+        <div style="text-align:right;"><span class="muted mono" style="font-size:11.5px;">${safeHTML(a.date)}</span>${ROLE_PERMS.appello.includes(currentRole)?`<div style="margin-top:8px; display:flex; gap:6px;"><button class="btn btn-ghost btn-sm" onclick="togglePinAnnounce(${i})">★</button><button class="btn btn-danger btn-sm" onclick="deleteAnnounce(${i})">Elimina</button></div>`:''}</div>
+      </div><p style="margin-top:8px; font-size:13.5px;">${safeHTML(a.body)}</p>
+    </div>`).join('') || '<p>Nessun annuncio.</p>';
+}
+function addAnnounce(){
+  const title = document.getElementById('annTitle').value.trim();
+  const type = document.getElementById('annType').value;
+  const body = document.getElementById('annBody').value.trim();
+  const image = document.getElementById('annImage')?.value.trim() || '';
+  const pinned = !!document.getElementById('annPinned')?.checked;
+  if(!title || !body){ toast('Compila titolo e testo','warn'); return; }
+  announcements.unshift({title, type, body, image, pinned, date:new Date().toLocaleString('it-IT')});
+  ['annTitle','annBody','annImage'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const pin=document.getElementById('annPinned'); if(pin) pin.checked=false;
+  document.getElementById('newAnnounceWrap').style.display='none';
+  saveProfessionalData(); renderAnnounce(); toast('Annuncio pubblicato');
+}
+function togglePinAnnounce(i){ announcements[i].pinned=!announcements[i].pinned; saveProfessionalData(); renderAnnounce(); }
+function deleteAnnounce(i){ announcements.splice(i,1); saveProfessionalData(); renderAnnounce(); toast('Annuncio eliminato','warn'); }
+
+function renderRooms(){
+  ensureProfessionalPanels();
+  const host = document.getElementById('roomsGrid'); if(!host) return;
+  host.innerHTML = rooms.map(r=>{
+    const stats = attendanceSessions.filter(s=>String(s.roomId)===String(r.id));
+    const last = stats[0];
+    return `<div class="card"><div style="display:flex; justify-content:space-between; gap:12px;"><div><h3>${safeHTML(r.name)}</h3><p style="font-size:13px; margin-top:6px;">${safeHTML(r.description)}</p></div><div class="mono" style="color:var(--ice-400); font-size:22px;">${r.members.length}</div></div>
+      <div class="muted mono" style="font-size:11.5px; margin-top:10px;">${r.members.map(id=>safeHTML(members.find(m=>m.id===id)?.nick || '')).filter(Boolean).slice(0,8).join(' · ') || 'Nessun membro'}</div>
+      <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center; gap:8px;"><span class="mono muted" style="font-size:11px;">${last?`Ultimo: ${last.pres}/${last.total} presenti`:'Nessun appello'}</span><button class="btn btn-danger btn-sm" onclick="deleteRoom(${r.id})">Elimina</button></div>
+    </div>`;
+  }).join('');
+}
+function addRoom(){
+  const name = document.getElementById('roomName').value.trim();
+  const description = document.getElementById('roomDesc').value.trim() || 'Stanza operativa personalizzata.';
+  if(!name){ toast('Inserisci il nome della stanza','warn'); return; }
+  rooms.unshift({id:Date.now(), name, description, members:[]});
+  document.getElementById('roomName').value=''; document.getElementById('roomDesc').value='';
+  saveProfessionalData(); renderRooms(); toast('Stanza creata');
+}
+function deleteRoom(id){ rooms = rooms.filter(r=>r.id!==id); saveProfessionalData(); renderRooms(); toast('Stanza eliminata','warn'); }
+
+const originalSwitchPanel = switchPanel;
+switchPanel = function(key){ originalSwitchPanel(key); if(key==='stanze') renderRooms(); if(key==='appello') renderAppello(); if(key==='promemoria') renderAnnounce(); if(key==='impostazioni') updateSoundButton(); };
+
+function exportAttendanceCSV(){
+  const rows = [['Data','Appello','Tipo','Stanza','Membro','Stato']];
+  attendanceSessions.forEach(s=>s.records.forEach(r=>rows.push([s.date,s.label,s.type,s.roomName,r.nick,r.state])));
+  const csv = rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='presenze_schoolcraft.csv'; a.click(); URL.revokeObjectURL(a.href);
+  toast('CSV presenze esportato');
+}
+function updateSoundButton(){ const b=document.getElementById('soundToggleBtn'); if(b) b.textContent = soundEnabled ? 'Suoni: ON' : 'Suoni: OFF'; }
+function toggleSounds(){ soundEnabled=!soundEnabled; saveProfessionalData(); updateSoundButton(); if(soundEnabled) playUISound('notify'); }
+function resetLocalData(){ if(confirm('Vuoi davvero cancellare appelli, stanze e annunci salvati in questo browser?')){ localStorage.removeItem(SC2_STORAGE_KEY); location.reload(); } }
+
+loadProfessionalData();
+window.addEventListener('DOMContentLoaded', ()=>{
+  ensureProfessionalPanels(); updateSoundButton(); saveProfessionalData();
+});
+</script>
+
 </body>
 </html>
