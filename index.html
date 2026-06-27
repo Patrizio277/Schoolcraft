@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Schoolcraft Roleplay 2 — Centro Operativo</title>
+<title>Schoolcraft Roleplay 2 — Centro Operativo v2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
@@ -121,6 +121,67 @@ p{ color:var(--text-dim); line-height:1.65; }
   background-image:radial-gradient(var(--ice-500) 1.4px, transparent 1.4px);
   background-size:8px 8px; opacity:0.18; pointer-events:none;
 }
+
+
+/* --- Aggiornamento v2.0.0: footer professionale fisso + mobile --- */
+body{ padding-bottom:58px; }
+.build-footer{
+  position:fixed; left:0; right:0; bottom:0; z-index:650;
+  min-height:42px; padding:10px 18px calc(10px + env(safe-area-inset-bottom));
+  display:flex; align-items:center; justify-content:center; text-align:center;
+  background:rgba(7,11,20,0.82); backdrop-filter:blur(14px);
+  border-top:1px solid var(--border);
+  color:var(--text-mute); font-family:var(--font-mono); font-size:11.5px; letter-spacing:.05em;
+}
+.build-footer strong{ color:var(--text-dim); font-weight:500; }
+
+@media (max-width: 860px){
+  .wrap{ padding:0 18px; }
+  .section{ padding:66px 0; }
+  header#mainNav .wrap{ height:auto !important; min-height:64px; padding-top:10px; padding-bottom:10px; gap:12px; flex-wrap:wrap; }
+  header#mainNav nav{ order:3; width:100%; justify-content:flex-start !important; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+  header#mainNav nav::-webkit-scrollbar{ display:none; }
+  header#mainNav nav a, header#mainNav nav button{ flex:0 0 auto; }
+  #home{ padding-top:140px !important; }
+  h1{ font-size:clamp(34px, 10vw, 58px) !important; }
+  h2{ font-size:clamp(26px, 7vw, 38px); }
+  .card{ padding:18px; }
+  .btn{ width:auto; min-height:42px; }
+  .btn-sm{ min-height:38px; }
+  table{ min-width:680px; }
+  #panel-membri .card[style*="overflow:hidden"]{ overflow-x:auto !important; }
+  #panel-membri .card[style*="overflow:hidden"]::-webkit-scrollbar{ height:8px; }
+  #panel-membri .card[style*="overflow:hidden"]::-webkit-scrollbar-thumb{ background:var(--border-strong); border-radius:99px; }
+}
+
+@media (max-width: 640px){
+  body{ padding-bottom:64px; }
+  .build-footer{ font-size:10.5px; line-height:1.45; padding-left:12px; padding-right:12px; }
+  .wrap{ padding:0 14px; }
+  .section{ padding:52px 0; }
+  #home{ padding-top:154px !important; padding-bottom:48px !important; }
+  .eyebrow{ font-size:10.5px; letter-spacing:.1em; }
+  p{ font-size:14px; }
+  .btn{ width:100%; }
+  .btn-sm{ width:auto; }
+  header#mainNav img{ max-width:170px; height:auto !important; }
+  header#mainNav nav{ gap:8px !important; }
+  header#mainNav nav a, header#mainNav nav button{ padding:8px 11px !important; font-size:12px !important; }
+  #view-dashboard > header .wrap{ padding-top:92px !important; padding-bottom:22px !important; }
+  #view-dashboard aside{ position:relative !important; top:auto !important; }
+  #view-dashboard main{ min-width:0; }
+  .dash-panel{ padding:16px !important; border-radius:var(--radius) !important; }
+  .dash-panel > div:first-child{ align-items:flex-start !important; }
+  .dash-panel > div:first-child .btn{ width:100%; }
+  #appelloList .card{ padding:14px !important; }
+  #appelloList .card > div{ flex-direction:column; align-items:flex-start !important; gap:12px !important; }
+  #appelloList .card > div > div:last-child{ width:100%; display:grid !important; grid-template-columns:repeat(3,1fr); gap:8px !important; }
+  #appelloList .card .btn-sm{ width:100%; padding:9px 6px; font-size:12px; }
+  #roomsGrid{ grid-template-columns:1fr !important; }
+  #memberProfile .card > div[style*="grid-template-columns"]{ grid-template-columns:1fr !important; }
+  input, select, textarea{ font-size:16px !important; }
+}
+
 </style>
 </head>
 <body>
@@ -1241,6 +1302,754 @@ loadProfessionalData();
 window.addEventListener('DOMContentLoaded', ()=>{
   ensureProfessionalPanels(); updateSoundButton(); saveProfessionalData();
 });
+</script>
+
+
+<script>
+/* ============ UPGRADE 1.2 CURRENT OPS: stile invariato, ambiente lavorativo, online/offline ============ */
+(function(){
+  const CURRENT_BUILD = 'v2.0.0';
+  const ONLINE_KEY = 'schoolcraft_roleplay_2_operator_presence_v12';
+  const SESSION_KEY = 'schoolcraft_roleplay_2_current_session_v12';
+  const SAVE_KEY = 'schoolcraft_roleplay_2_save_status_v12';
+  let memberSearch = '';
+  let memberStatusFilter = 'all';
+  let memberRoleFilter = 'all';
+  let currentSession = JSON.parse(localStorage.getItem(SESSION_KEY) || '{}');
+  if(!currentSession.states) currentSession.states = {};
+  if(!currentSession.startedAt) currentSession.startedAt = new Date().toLocaleString('it-IT');
+
+  function esc(v){ return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function roleName(){ return ROLE_LABEL[currentRole] || 'Operatore'; }
+  function currentOperatorName(){ return localStorage.getItem('sc2_operator_name') || 'Zeppetto Trapolaio'; }
+  function saveCurrentSession(){ localStorage.setItem(SESSION_KEY, JSON.stringify(currentSession)); showSaveStatus('Tutto salvato'); }
+  function showSaveStatus(text){
+    const el = document.getElementById('saveStatusPill');
+    if(!el) return;
+    el.innerHTML = `<span class="online-dot"></span>${esc(text)}`;
+    localStorage.setItem(SAVE_KEY, text);
+  }
+  function pulseSaving(){
+    const el = document.getElementById('saveStatusPill');
+    if(el) el.innerHTML = `<span class="online-dot saving"></span>Salvataggio...`;
+    setTimeout(()=>showSaveStatus('Tutto salvato'), 450);
+  }
+  function onlineSeed(id){ return id===1 || id===2 || id===4 || id===7 || id===11 || id===15; }
+  function isMemberOnline(m){ return !!m._online || onlineSeed(m.id); }
+  function statusPill(online, small=false){
+    return `<span class="status-pill ${online?'is-online':'is-offline'} ${small?'small':''}"><span class="online-dot ${online?'':'off'}"></span>${online?'Online':'Offline'}</span>`;
+  }
+  function currentCounts(){
+    const vals = Object.values(currentSession.states || {});
+    const pres = vals.filter(v=>v==='presente').length;
+    const abs = vals.filter(v=>v==='assente').length;
+    const just = vals.filter(v=>v==='giustificato').length;
+    const online = members.filter(isMemberOnline).length;
+    return {pres, abs, just, online, total:members.length, announcements:announcements.filter(a=>a.pinned || a.type).length};
+  }
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .operator-chip{display:flex;align-items:center;gap:10px;border:1px solid var(--border-strong);background:rgba(17,26,46,.72);border-radius:999px;padding:7px 10px 7px 8px;box-shadow:0 8px 28px -18px rgba(56,182,255,.65)}
+    .operator-avatar{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--ice-500),var(--blue-deep));display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;color:#06101a;font-size:12px}
+    .operator-meta{line-height:1.1}.operator-name{font-size:12px;font-weight:700}.operator-role{font-size:10.5px;color:var(--text-dim);font-family:var(--font-mono)}
+    .status-pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-strong);border-radius:999px;padding:5px 9px;font-family:var(--font-mono);font-size:11px;color:var(--green);background:rgba(52,224,161,.08)}
+    .status-pill.is-offline{color:var(--text-mute);background:rgba(94,114,153,.08)}.status-pill.small{font-size:10.5px;padding:4px 7px}
+    .online-dot{width:8px;height:8px;border-radius:999px;background:var(--green);box-shadow:0 0 0 0 rgba(52,224,161,.6);animation:sc2Pulse 1.7s infinite}.online-dot.off{background:var(--text-mute);box-shadow:none;animation:none}.online-dot.saving{background:var(--amber);animation:sc2PulseAmber 1.1s infinite}
+    @keyframes sc2Pulse{0%{box-shadow:0 0 0 0 rgba(52,224,161,.55)}70%{box-shadow:0 0 0 8px rgba(52,224,161,0)}100%{box-shadow:0 0 0 0 rgba(52,224,161,0)}}
+    @keyframes sc2PulseAmber{0%{box-shadow:0 0 0 0 rgba(255,176,32,.55)}70%{box-shadow:0 0 0 8px rgba(255,176,32,0)}100%{box-shadow:0 0 0 0 rgba(255,176,32,0)}}
+    .ops-input{background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;font-family:var(--font-mono);outline:none}.ops-input:focus{border-color:var(--ice-500);box-shadow:0 0 0 3px rgba(56,182,255,.08)}
+    .ops-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.ops-kpi{display:flex;align-items:center;justify-content:space-between;gap:10px}.ops-kpi .num{font-family:var(--font-display);font-size:30px;margin-top:6px}.soft-label{font-family:var(--font-mono);font-size:11.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+    .build-tag{position:fixed;right:18px;bottom:16px;z-index:450;border:1px solid var(--border);background:rgba(7,11,20,.72);backdrop-filter:blur(12px);border-radius:10px;padding:8px 10px;color:var(--text-mute);font-size:10.5px;font-family:var(--font-mono)}
+  `;
+  document.head.appendChild(style);
+
+  function ensureCurrentOpsUI(){
+    const navWrap = document.querySelector('#mainNav .wrap');
+    if(navWrap && !document.getElementById('publicOperatorChip')){
+      navWrap.insertAdjacentHTML('beforeend', `<div id="publicOperatorChip" class="operator-chip" style="display:none;"><div class="operator-avatar">ZT</div><div class="operator-meta"><div class="operator-name">${esc(currentOperatorName())}</div><div class="operator-role"><span class="online-dot"></span> Online</div></div></div>`);
+    }
+    const dashHeader = document.querySelector('#view-dashboard header div[style*="justify-content:space-between"]');
+    if(dashHeader && !document.getElementById('dashboardOperatorChip')){
+      dashHeader.insertAdjacentHTML('beforeend', `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><div id="saveStatusPill" class="status-pill"><span class="online-dot"></span>Tutto salvato</div><div id="dashboardOperatorChip" class="operator-chip"><div class="operator-avatar">ZT</div><div class="operator-meta"><div class="operator-name">${esc(currentOperatorName())}</div><div class="operator-role">${esc(roleName())} · Online</div></div></div></div>`);
+    }
+    if(!document.getElementById('buildTag')) document.body.insertAdjacentHTML('beforeend', `<div id="buildTag" class="build-tag">Schoolcraft Roleplay 2 · Centro Operativo · ${CURRENT_BUILD}</div>`);
+    const membriWrap = document.getElementById('membriListWrap');
+    if(membriWrap && !document.getElementById('memberFilters')){
+      membriWrap.insertAdjacentHTML('beforebegin', `<div id="memberFilters" class="card" style="margin-bottom:14px;"><div class="ops-bar" style="margin-bottom:0;"><input id="memberSearchInput" class="ops-input" placeholder="Cerca membro..." style="flex:1;min-width:190px;"><select id="memberStatusFilter" class="ops-input"><option value="all">Tutti gli stati</option><option value="online">Solo online</option><option value="offline">Solo offline</option></select><select id="memberRoleFilter" class="ops-input"><option value="all">Tutti i ruoli</option></select></div></div>`);
+      const roles = [...new Set(members.map(m=>m.role))].sort();
+      document.getElementById('memberRoleFilter').insertAdjacentHTML('beforeend', roles.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join(''));
+      document.getElementById('memberSearchInput').oninput = e=>{ memberSearch=e.target.value.toLowerCase(); renderMembri(); };
+      document.getElementById('memberStatusFilter').onchange = e=>{ memberStatusFilter=e.target.value; renderMembri(); };
+      document.getElementById('memberRoleFilter').onchange = e=>{ memberRoleFilter=e.target.value; renderMembri(); };
+    }
+    const hist = document.getElementById('attendanceHistoryCard');
+    if(hist) hist.style.display = 'none';
+    const stats1 = document.querySelector('#panel-statistiche .eyebrow');
+    if(stats1 && stats1.textContent.includes('Presenze nel tempo')) stats1.textContent = 'Stato presenza attuale';
+  }
+
+  const oldShowView = showView;
+  showView = function(v){ oldShowView(v); ensureCurrentOpsUI(); const pub=document.getElementById('publicOperatorChip'); if(pub) pub.style.display = v==='public' ? 'flex':'none'; };
+
+  renderOverview = function(){
+    ensureCurrentOpsUI();
+    const c = currentCounts();
+    const panel = document.getElementById('panel-panoramica');
+    if(panel){
+      const kpis = panel.querySelector('div[style*="grid-template-columns:repeat(4,1fr)"]');
+      if(kpis){
+        kpis.innerHTML = `
+          <div class="card"><div class="ops-kpi"><div><div class="soft-label">Membri</div><div class="num">${c.total}</div></div><span class="status-pill small">Team</span></div></div>
+          <div class="card"><div class="ops-kpi"><div><div class="soft-label">Online ora</div><div class="num" style="color:var(--green);">${c.online}</div></div>${statusPill(true,true)}</div></div>
+          <div class="card"><div class="ops-kpi"><div><div class="soft-label">Presenti attuali</div><div class="num" style="color:var(--ice-400);">${c.pres}</div></div><span class="status-pill small">Sessione</span></div></div>
+          <div class="card"><div class="ops-kpi"><div><div class="soft-label">Annunci attivi</div><div class="num" style="color:var(--amber);">${announcements.length}</div></div><span class="status-pill small">Attuali</span></div></div>`;
+      }
+      const title = panel.querySelector('.eyebrow'); if(title) title.textContent = 'Stato operativo attuale';
+      const feed = document.getElementById('activityFeed');
+      if(feed){
+        feed.innerHTML = [
+          ['Operatore online', `${currentOperatorName()} · ${roleName()}`],
+          ['Sessione corrente', `Presenti ${c.pres} · Assenti ${c.abs} · Giustificati ${c.just}`],
+          ['Utenti connessi', `${c.online}/${c.total} membri online ora`],
+          ['Sistema', localStorage.getItem(SAVE_KEY) || 'Tutto salvato']
+        ].map(r=>`<div><span style="color:var(--ice-400);">›</span> <strong style="color:var(--text);font-family:var(--font-body);font-weight:600;">${esc(r[0])}</strong><br><span class="muted">${esc(r[1])}</span></div>`).join('');
+      }
+      const ctx = document.getElementById('chartOverview');
+      if(ctx){
+        if(window.chartOverviewInst) window.chartOverviewInst.destroy();
+        const base = [c.online, c.pres, c.abs, c.just];
+        window.chartOverviewInst = new Chart(ctx, {type:'bar',data:{labels:['Online','Presenti','Assenti','Giust.'],datasets:[{data:base, borderWidth:1, borderColor:'rgba(143,184,255,.28)', backgroundColor:'rgba(56,182,255,.18)'}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(143,184,255,.08)'},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}},x:{grid:{display:false},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}}}}});
+      }
+    }
+  };
+
+  renderAttendanceHistory = function(){ const card=document.getElementById('attendanceHistoryCard'); if(card) card.style.display='none'; };
+
+  const oldPaintAppello = paintAppello;
+  paintAppello = function(){
+    oldPaintAppello();
+    document.querySelectorAll('#appelloList .card').forEach(card=>{
+      const name = card.querySelector('div div div')?.textContent?.trim() || '';
+      const m = members.find(x=>x.nick===name);
+      if(m && !card.querySelector('.status-pill')){
+        const info = card.querySelector('.muted');
+        if(info) info.insertAdjacentHTML('afterend', `<div style="margin-top:5px;">${statusPill(isMemberOnline(m), true)}</div>`);
+      }
+    });
+    const head = document.querySelector('#panel-appello .eyebrow'); if(head) head.textContent='Appello sessione attuale';
+  };
+
+  const oldSetAppello = setAppello;
+  setAppello = function(id,state){ currentSession.states[id]=state; oldSetAppello(id,state); saveCurrentSession(); renderOverview(); };
+  const oldMarkAll = markAll;
+  markAll = function(state){ oldMarkAll(state); members.forEach(m=>currentSession.states[m.id]=appelloState[m.id]); saveCurrentSession(); renderOverview(); };
+  const oldResetAppello = resetAppello;
+  resetAppello = function(){ oldResetAppello(); currentSession.states={}; saveCurrentSession(); renderOverview(); };
+  const oldSaveAppello = saveAppello;
+  saveAppello = function(){ pulseSaving(); oldSaveAppello(); currentSession.lastSaved = new Date().toLocaleString('it-IT'); saveCurrentSession(); renderOverview(); };
+
+  renderMembri = function(){
+    ensureCurrentOpsUI();
+    const tb = document.getElementById('membriTbody'); if(!tb) return;
+    const filtered = members.filter(m=>{
+      const online = isMemberOnline(m);
+      return (!memberSearch || m.nick.toLowerCase().includes(memberSearch) || m.role.toLowerCase().includes(memberSearch)) &&
+             (memberStatusFilter==='all' || (memberStatusFilter==='online' && online) || (memberStatusFilter==='offline' && !online)) &&
+             (memberRoleFilter==='all' || m.role===memberRoleFilter);
+    });
+    tb.innerHTML = filtered.map(m=>{
+      const state = currentSession.states[m.id] || 'non segnato';
+      const online = isMemberOnline(m);
+      const stateColor = state==='presente'?'var(--green)':state==='assente'?'var(--red)':state==='giustificato'?'var(--amber)':'var(--text-mute)';
+      return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="openProfile(${m.id})">
+        <td style="padding:13px 18px;display:flex;align-items:center;gap:10px;"><div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--ice-500),var(--blue-deep));display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--font-display);font-size:12px;">${esc(m.nick[0])}</div><div><div>${esc(m.nick)}</div><div style="margin-top:4px;">${statusPill(online,true)}</div></div></td>
+        <td><span class="mono" style="font-size:11.5px;color:var(--text-dim);">${esc(m.role)}</span></td>
+        <td><span style="color:${stateColor};font-family:var(--font-mono);font-size:12.5px;text-transform:capitalize;">${esc(state)}</span></td>
+        <td><span class="mono" style="font-size:12.5px;">Lv.${m.level}</span></td>
+        <td style="padding-right:18px;text-align:right;"><span class="muted" style="font-size:12px;">Scheda →</span></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="5" style="padding:18px;"><p>Nessun membro trovato.</p></td></tr>`;
+  };
+
+  openProfile = function(id){
+    const m = members.find(x=>x.id===id); if(!m) return;
+    const online = isMemberOnline(m); const state = currentSession.states[m.id] || 'non segnato';
+    const box = document.getElementById('memberProfile'); box.style.display='block';
+    box.innerHTML = `<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:14px;"><div style="display:flex;align-items:center;gap:14px;"><div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--ice-500),var(--blue-deep));display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--font-display);font-size:20px;color:#06101a;">${esc(m.nick[0])}</div><div><h3 style="font-size:19px;">${esc(m.nick)}</h3><div class="muted mono" style="font-size:12px;">${esc(m.role)} · Lv.${m.level}</div><div style="margin-top:8px;">${statusPill(online)}</div></div></div><button class="btn btn-ghost btn-sm" onclick="document.getElementById('memberProfile').style.display='none'">Chiudi</button></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;"><div><div class="soft-label">Stato pannello</div><div style="font-family:var(--font-display);font-size:24px;color:${online?'var(--green)':'var(--text-mute)'};">${online?'Online':'Offline'}</div></div><div><div class="soft-label">Appello attuale</div><div style="font-family:var(--font-display);font-size:24px;text-transform:capitalize;">${esc(state)}</div></div><div><div class="soft-label">Ruolo</div><div style="font-family:var(--font-display);font-size:24px;">${esc(m.role)}</div></div></div><div class="block-rule"><span></span><i></i><span></span></div><p>Questa scheda mostra solo lo stato attuale del membro. Nessuno storico viene mostrato nel pannello operativo.</p></div>`;
+  };
+
+  const oldRenderRooms = renderRooms;
+  renderRooms = function(){
+    oldRenderRooms();
+    document.querySelectorAll('#roomsGrid .card').forEach((card, idx)=>{
+      const r = rooms[idx]; if(!r) return;
+      const online = r.members.filter(id=>isMemberOnline(members.find(m=>m.id===id)||{})).length;
+      const p = card.querySelector('.muted.mono');
+      if(p) p.insertAdjacentHTML('afterend', `<div style="margin-top:10px;">${statusPill(online>0,true)} <span class="mono muted" style="font-size:11px;margin-left:6px;">${online}/${r.members.length} online</span></div>`);
+    });
+  };
+
+  const oldAddAnnounce = addAnnounce;
+  addAnnounce = function(){ oldAddAnnounce(); pulseSaving(); renderOverview(); };
+  const oldDeleteAnnounce = deleteAnnounce;
+  deleteAnnounce = function(i){ oldDeleteAnnounce(i); pulseSaving(); renderOverview(); };
+  const oldTogglePinAnnounce = togglePinAnnounce;
+  togglePinAnnounce = function(i){ oldTogglePinAnnounce(i); pulseSaving(); renderOverview(); };
+
+  window.addEventListener('DOMContentLoaded', ()=>{
+    ensureCurrentOpsUI();
+    members.forEach(m=>m._online = onlineSeed(m.id));
+    if(currentSession.states){ Object.keys(currentSession.states).forEach(id=>appelloState[id]=currentSession.states[id]); }
+    showSaveStatus(localStorage.getItem(SAVE_KEY) || 'Tutto salvato');
+    renderOverview();
+  });
+})();
+</script>
+
+<footer class="build-footer" aria-label="Versione Centro Operativo">
+  <strong>Schoolcraft Roleplay 2</strong>&nbsp;·&nbsp;Centro Operativo&nbsp;·&nbsp;v2.0.0
+</footer>
+
+
+
+<!-- =========================
+     SCHOOLCRAFT ROLEPLAY 2 — CENTRO OPERATIVO v2.0
+     Realtime-ready layer: login, Firebase/Supabase config placeholder, presence, shared data, permissions, audit log, backups.
+     Works locally first; enables cloud when Firebase config is inserted.
+========================= -->
+<style id="sc-v2-style">
+  :root{ --violet:#8B5CF6; }
+  #attendanceHistoryCard{ display:none !important; }
+  .v2-shell{position:relative;}
+  .v2-top-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0;}
+  .v2-mini-card{background:linear-gradient(180deg,var(--surface),var(--surface-2));border:1px solid var(--border);border-radius:var(--radius);padding:16px;overflow:hidden;position:relative;}
+  .v2-mini-card strong{font-family:var(--font-display);font-size:26px;display:block;margin-top:6px;}
+  .v2-soft-label{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-mute);}
+  .v2-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);border-radius:999px;padding:7px 10px;background:rgba(17,26,46,.76);font-size:12px;font-family:var(--font-mono);color:var(--text-dim);}
+  .v2-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--text-mute);box-shadow:0 0 0 rgba(52,224,161,0);}
+  .v2-dot.online{background:var(--green);animation:v2Pulse 1.65s infinite;}
+  .v2-dot.away{background:var(--amber);}
+  .v2-dot.offline{background:var(--text-mute);}
+  @keyframes v2Pulse{0%{box-shadow:0 0 0 0 rgba(52,224,161,.55)}70%{box-shadow:0 0 0 7px rgba(52,224,161,0)}100%{box-shadow:0 0 0 0 rgba(52,224,161,0)}}
+  .v2-modal{position:fixed;inset:0;background:rgba(2,6,15,.72);backdrop-filter:blur(12px);z-index:2000;display:none;align-items:center;justify-content:center;padding:22px;}
+  .v2-modal.open{display:flex;}
+  .v2-dialog{width:min(680px,100%);max-height:88vh;overflow:auto;background:linear-gradient(180deg,var(--surface),var(--surface-2));border:1px solid var(--border-strong);border-radius:var(--radius-lg);padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.45);}
+  .v2-input,.v2-select,.v2-textarea{width:100%;background:var(--surface-3);border:1px solid var(--border-strong);color:var(--text);padding:11px 13px;border-radius:10px;font-family:var(--font-mono);font-size:13px;outline:none;}
+  .v2-input:focus,.v2-select:focus,.v2-textarea:focus{border-color:var(--ice-500);box-shadow:0 0 0 3px rgba(56,182,255,.1);}
+  .v2-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .v2-role-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;}
+  .v2-role-chip{border:1px solid var(--border);background:rgba(28,42,71,.65);border-radius:10px;padding:10px;font-size:12px;font-family:var(--font-mono);color:var(--text-dim);}
+  .v2-role-chip.core{border-color:rgba(52,224,161,.28);color:var(--green);}
+  .v2-role-chip.prod{border-color:rgba(111,227,255,.24);color:var(--ice-300);}
+  .v2-log{display:flex;flex-direction:column;gap:9px;max-height:260px;overflow:auto;padding-right:4px;}
+  .v2-log-row{display:grid;grid-template-columns:72px 1fr;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px;background:rgba(11,18,32,.48);}
+  .v2-admin-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:18px 0;}
+  .v2-firebase-off{border-color:rgba(255,176,32,.36)!important;}
+  .v2-firebase-on{border-color:rgba(52,224,161,.36)!important;}
+  .v2-mobile-nav{display:none;}
+  @media(max-width:860px){
+    .v2-top-strip{grid-template-columns:repeat(2,1fr)}
+    .v2-form-grid,.v2-role-grid{grid-template-columns:1fr}
+    .v2-admin-bar{align-items:stretch}.v2-admin-bar .btn{width:100%}
+    .v2-mini-card strong{font-size:23px}
+  }
+  @media(max-width:560px){
+    .v2-top-strip{grid-template-columns:1fr}.v2-dialog{padding:18px;border-radius:18px}.v2-log-row{grid-template-columns:1fr}
+    .build-footer{font-size:10px;padding:8px 10px}.section{padding:78px 0}.wrap{padding:0 18px}
+  }
+</style>
+
+<div id="v2LoginModal" class="v2-modal" aria-hidden="true">
+  <div class="v2-dialog">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;">
+      <div>
+        <div class="eyebrow">Accesso operativo v2.0</div>
+        <h2 style="font-size:30px;">Login Centro Operativo</h2>
+        <p style="margin-top:8px;">Accesso locale immediato. Con Firebase configurato, login e presenza diventano sincronizzati tra PC e telefono.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="SCV2.closeLogin()">Chiudi</button>
+    </div>
+    <div class="v2-form-grid">
+      <input id="v2LoginName" class="v2-input" placeholder="Nome operatore" value="Zeppetto Trapolaio">
+      <select id="v2LoginPermission" class="v2-select">
+        <option>Admin</option><option>Staff</option><option>Moderatore</option><option>Membro</option>
+      </select>
+      <input id="v2LoginEmail" class="v2-input" placeholder="Email Firebase opzionale">
+      <input id="v2LoginPassword" class="v2-input" placeholder="Password Firebase opzionale" type="password">
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+      <button class="btn btn-primary" onclick="SCV2.login()">Entra nel pannello</button>
+      <button class="btn btn-ghost" onclick="SCV2.logout()">Esci</button>
+    </div>
+  </div>
+</div>
+
+<div id="v2ConfigModal" class="v2-modal" aria-hidden="true">
+  <div class="v2-dialog">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;">
+      <div>
+        <div class="eyebrow">Database online</div>
+        <h2 style="font-size:30px;">Firebase / Supabase</h2>
+        <p style="margin-top:8px;">Per ora il file usa salvataggio locale. Inserendo la configurazione Firebase, abiliti presenza reale, sincronizzazione e backup cloud.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="SCV2.closeConfig()">Chiudi</button>
+    </div>
+    <textarea id="v2FirebaseConfig" class="v2-textarea" rows="8" placeholder='Incolla qui la configurazione Firebase, esempio:&#10;{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+      <button class="btn btn-primary" onclick="SCV2.saveFirebaseConfig()">Salva configurazione</button>
+      <button class="btn btn-ghost" onclick="SCV2.testFirebase()">Test collegamento</button>
+      <button class="btn btn-danger" onclick="SCV2.clearFirebaseConfig()">Rimuovi config</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" id="sc-v2-module">
+const V2_KEYS = {
+  user:'sc_v2_current_user', config:'sc_v2_firebase_config', presence:'sc_v2_presence', log:'sc_v2_audit_log', backup:'sc_v2_backup', permissions:'sc_v2_permissions'
+};
+const PRODUCTION_ROLES = ['ATTORI','DOPPIATORI','DOPP/ATT','GRAFICO','BUILDER','SCRITTORE','Music Production'];
+const PERMISSION_ROLES = ['Admin','Staff','Moderatore','Membro'];
+let firebaseReady=false, db=null, auth=null, fb=null;
+const escV2 = (v='') => String(v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nowTime = () => new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+const read = (k, fallback) => { try{return JSON.parse(localStorage.getItem(k)) ?? fallback}catch{return fallback} };
+const write = (k,v) => localStorage.setItem(k, JSON.stringify(v));
+function currentUser(){ return read(V2_KEYS.user, {name:'Zeppetto Trapolaio', permission:'Admin', online:true, email:'', lastSeen:Date.now()}); }
+function log(action, details=''){
+  const u=currentUser(); const items=read(V2_KEYS.log, []);
+  items.unshift({time:nowTime(), at:Date.now(), by:u.name, role:u.permission, action, details});
+  write(V2_KEYS.log, items.slice(0,24)); renderV2();
+}
+function presence(){ return read(V2_KEYS.presence, {}); }
+function setMyPresence(status='online'){
+  const u=currentUser(); u.online=status==='online'; u.lastSeen=Date.now(); write(V2_KEYS.user,u);
+  const p=presence(); p[u.name]={name:u.name, permission:u.permission, status, lastSeen:Date.now()}; write(V2_KEYS.presence,p);
+  renderV2();
+}
+function onlineCount(){
+  const p=presence(); const t=Date.now();
+  return Object.values(p).filter(x => x.status==='online' && t-(x.lastSeen||0)<1000*60*3).length;
+}
+function permissionRank(role){ return {Admin:4,Staff:3,Moderatore:2,Membro:1}[role] || 1; }
+function can(level){ return permissionRank(currentUser().permission) >= permissionRank(level); }
+async function tryLoadFirebase(){
+  const cfg=read(V2_KEYS.config, null); if(!cfg || !cfg.apiKey || !cfg.projectId) return false;
+  try{
+    const appMod = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js');
+    const fireMod = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js');
+    const authMod = await import('https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js');
+    const app = appMod.initializeApp(cfg);
+    db = fireMod.getFirestore(app); auth = authMod.getAuth(app);
+    fb = {fireMod, authMod}; firebaseReady=true; return true;
+  }catch(e){ console.warn('Firebase non disponibile:', e); firebaseReady=false; return false; }
+}
+async function syncPresenceCloud(){
+  if(!firebaseReady || !db || !fb) return;
+  try{
+    const u=currentUser();
+    await fb.fireMod.setDoc(fb.fireMod.doc(db,'schoolcraft_presence',u.name), {name:u.name, permission:u.permission, status:'online', lastSeen:Date.now()}, {merge:true});
+  }catch(e){console.warn(e)}
+}
+function injectV2(){
+  if(document.getElementById('v2Panel')) return;
+  const target = document.getElementById('panel-dashboard') || document.querySelector('.section .wrap') || document.body;
+  const panel = document.createElement('div'); panel.id='v2Panel'; panel.className='v2-shell';
+  panel.innerHTML = `
+    <div class="v2-admin-bar">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span id="v2UserPill" class="v2-pill"></span>
+        <span id="v2FirebasePill" class="v2-pill"></span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="SCV2.openLogin()">Accesso</button>
+        <button class="btn btn-ghost btn-sm" onclick="SCV2.openConfig()">Database</button>
+        <button class="btn btn-ghost btn-sm" onclick="SCV2.createBackup()">Backup</button>
+      </div>
+    </div>
+    <div class="v2-top-strip">
+      <div class="v2-mini-card"><div class="v2-soft-label">Utenti online</div><strong id="v2OnlineCount">0</strong><p class="muted">Presenza pannello in tempo reale.</p></div>
+      <div class="v2-mini-card"><div class="v2-soft-label">Permesso attuale</div><strong id="v2PermissionNow">Admin</strong><p class="muted">Admin, Staff, Moderatore o Membro.</p></div>
+      <div class="v2-mini-card"><div class="v2-soft-label">Database</div><strong id="v2DbState">Locale</strong><p class="muted">Pronto per Firebase/Supabase.</p></div>
+      <div class="v2-mini-card"><div class="v2-soft-label">Ultimo backup</div><strong id="v2BackupTime">—</strong><p class="muted">Backup automatico dei dati operativi.</p></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;" class="v2-grid-main">
+      <div class="card">
+        <div class="eyebrow">Ruoli e permessi</div>
+        <p>Permessi gestionali + ruoli produzione richiesti.</p>
+        <div id="v2Roles" class="v2-role-grid"></div>
+      </div>
+      <div class="card">
+        <div class="eyebrow">Registro modifiche recenti</div>
+        <p style="margin-bottom:12px;">Mostra solo le attività recenti: chi ha fatto cosa, senza creare uno storico pesante.</p>
+        <div id="v2Log" class="v2-log"></div>
+      </div>
+    </div>`;
+  target.prepend(panel);
+  const css=document.createElement('style'); css.textContent='@media(max-width:900px){.v2-grid-main{grid-template-columns:1fr!important}}'; document.head.appendChild(css);
+}
+function renderV2(){
+  injectV2(); const u=currentUser(); const cfg=read(V2_KEYS.config,null); const last=read(V2_KEYS.backup,null);
+  document.getElementById('v2UserPill').innerHTML = `<span class="v2-dot online"></span><strong>${escV2(u.name)}</strong>&nbsp;·&nbsp;${escV2(u.permission)} · Online`;
+  const fp=document.getElementById('v2FirebasePill'); fp.className='v2-pill '+(firebaseReady?'v2-firebase-on':'v2-firebase-off'); fp.innerHTML=`<span class="v2-dot ${firebaseReady?'online':'away'}"></span>${firebaseReady?'Firebase collegato':'Locale / Firebase non configurato'}`;
+  document.getElementById('v2OnlineCount').textContent = onlineCount();
+  document.getElementById('v2PermissionNow').textContent = u.permission;
+  document.getElementById('v2DbState').textContent = firebaseReady ? 'Cloud' : (cfg?'Config salvata':'Locale');
+  document.getElementById('v2BackupTime').textContent = last ? last.time : '—';
+  document.getElementById('v2Roles').innerHTML = [...PERMISSION_ROLES.map(r=>`<div class="v2-role-chip core">👑 ${r}</div>`), ...PRODUCTION_ROLES.map(r=>`<div class="v2-role-chip prod">🎬 ${r}</div>`)].join('');
+  const logs=read(V2_KEYS.log, []);
+  document.getElementById('v2Log').innerHTML = logs.length ? logs.map(x=>`<div class="v2-log-row"><div class="mono muted">${escV2(x.time)}</div><div><strong>${escV2(x.by)}</strong> <span class="muted mono">${escV2(x.role)}</span><br><span>${escV2(x.action)}</span>${x.details?`<p style="margin-top:4px;">${escV2(x.details)}</p>`:''}</div></div>`).join('') : '<p>Nessuna attività recente.</p>';
+}
+function snapshotData(){
+  const data={version:'2.0.0', createdAt:new Date().toISOString(), user:currentUser(), local:{}};
+  Object.keys(localStorage).filter(k=>k.startsWith('sc_') || k.startsWith('schoolcraft')).forEach(k=>data.local[k]=localStorage.getItem(k));
+  return data;
+}
+function downloadJSON(name,obj){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:'application/json'})); a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+window.SCV2 = {
+  openLogin(){ document.getElementById('v2LoginModal').classList.add('open'); }, closeLogin(){ document.getElementById('v2LoginModal').classList.remove('open'); },
+  openConfig(){ const cfg=read(V2_KEYS.config,{}); document.getElementById('v2FirebaseConfig').value=Object.keys(cfg).length?JSON.stringify(cfg,null,2):''; document.getElementById('v2ConfigModal').classList.add('open'); }, closeConfig(){ document.getElementById('v2ConfigModal').classList.remove('open'); },
+  login(){ const name=document.getElementById('v2LoginName').value.trim()||'Operatore'; const permission=document.getElementById('v2LoginPermission').value; const email=document.getElementById('v2LoginEmail').value.trim(); write(V2_KEYS.user,{name,permission,email,online:true,lastSeen:Date.now()}); setMyPresence('online'); log('Accesso effettuato','Pannello operativo aperto.'); this.closeLogin(); syncPresenceCloud(); },
+  logout(){ setMyPresence('offline'); log('Uscita dal pannello'); },
+  saveFirebaseConfig(){ try{ const cfg=JSON.parse(document.getElementById('v2FirebaseConfig').value); write(V2_KEYS.config,cfg); log('Configurazione database salvata','Firebase pronto per il test.'); this.closeConfig(); tryLoadFirebase().then(renderV2); }catch{ alert('Configurazione non valida: incolla JSON Firebase completo.'); } },
+  clearFirebaseConfig(){ localStorage.removeItem(V2_KEYS.config); firebaseReady=false; log('Configurazione database rimossa'); renderV2(); },
+  async testFirebase(){ const ok=await tryLoadFirebase(); log(ok?'Test Firebase riuscito':'Test Firebase non riuscito', ok?'Connessione cloud pronta.':'Controlla configurazione e connessione.'); alert(ok?'Firebase collegato correttamente.':'Firebase non collegato. Controlla configurazione.'); renderV2(); },
+  createBackup(){ if(!can('Staff')) return alert('Permesso insufficiente: serve Staff o Admin.'); const snap=snapshotData(); write(V2_KEYS.backup,{time:nowTime(), at:Date.now()}); downloadJSON('schoolcraft_backup_v2_0.json', snap); log('Backup creato','File JSON scaricato.'); renderV2(); },
+  log, render:renderV2
+};
+window.addEventListener('DOMContentLoaded', async()=>{
+  injectV2(); setMyPresence('online'); await tryLoadFirebase(); renderV2(); log('Sistema v2.0 avviato','Dashboard condivisa, permessi, presenza e backup pronti.');
+  setInterval(()=>{setMyPresence('online'); syncPresenceCloud();}, 45000);
+  ['addAnnounce','deleteAnnounce','togglePinAnnounce','completeAttendance','saveAttendance','addRoom','resetLocalData'].forEach(fn=>{
+    const old=window[fn]; if(typeof old==='function') window[fn]=function(...args){ const r=old.apply(this,args); log('Operazione eseguita', fn); return r; };
+  });
+});
+window.addEventListener('beforeunload',()=>{ try{setMyPresence('offline')}catch{} });
+</script>
+
+
+
+<!-- =========================
+     PATCH v2.0.1 — correzioni richieste
+     - ruoli non tagliati
+     - calendario gestionale cliccabile/spostabile + rimozione eventi
+     - online reali: niente utenti finti
+     - valutazioni leggibili/rimuovibili
+     - login con nome obbligatorio
+     - statistiche vuote finché non viene fatto il primo appello
+========================= -->
+<style id="sc-v2-fix-style">
+  #v2Panel, #v2Panel .card{overflow:visible!important;}
+  #v2Roles.v2-role-grid{grid-template-columns:repeat(auto-fit,minmax(132px,1fr))!important;align-items:stretch;}
+  .v2-role-chip{min-height:42px;display:flex;align-items:center;gap:7px;white-space:normal;word-break:normal;line-height:1.25;}
+  #dashCalGrid .cal-cell:hover,#calGrid .cal-cell:hover{border-color:var(--ice-500)!important;transform:translateY(-1px);}
+  .cal-cell{transition:transform .15s ease,border-color .15s ease,background .15s ease;}
+  .cal-event-pill{display:flex;align-items:center;gap:4px;justify-content:space-between;}
+  .cal-event-delete{border:0;background:transparent;color:inherit;font-size:11px;opacity:.75;cursor:pointer;padding:0 2px;}
+  .cal-event-delete:hover{opacity:1;color:var(--red);}
+  .eval-card{cursor:pointer;}
+  .eval-card:hover{border-color:var(--border-strong)!important;}
+  .eval-actions{display:none;margin-top:10px;gap:8px;flex-wrap:wrap;}
+  .eval-card.open .eval-actions{display:flex;}
+  .real-status-dot{width:8px;height:8px;border-radius:999px;display:inline-block;background:var(--text-mute);}
+  .real-status-dot.online{background:var(--green);animation:v2Pulse 1.65s infinite;}
+  .real-status-dot.offline{background:var(--text-mute);}
+  @media(max-width:760px){
+    #dashCalGrid,#calGrid{gap:4px!important;}
+    #dashCalGrid .cal-cell,#calGrid .cal-cell{min-height:56px!important;padding:5px!important;font-size:11px!important;}
+    #newEventForm > div{grid-template-columns:1fr!important;}
+    #panel-statistiche > div:first-child{grid-template-columns:1fr!important;}
+    #membriListWrap{overflow-x:auto!important;}
+    #membriListWrap table{min-width:640px;}
+  }
+</style>
+<script id="sc-v2-fix-script">
+(function(){
+  const PRESENCE_TTL = 120000;
+  const FIX_VERSION = '2.0.1';
+  const ROLE_MAP = {Admin:'admin', Staff:'staff', Moderatore:'staff', Membro:'membro'};
+  const LABEL_MAP = {admin:'Admin', staff:'Staff', membro:'Membro', founder:'Founder'};
+  window.ROLE_LABEL = Object.assign({}, window.ROLE_LABEL||{}, LABEL_MAP);
+  window.ROLE_PERMS = window.ROLE_PERMS || {};
+  if(!ROLE_PERMS.valutazioni) ROLE_PERMS.valutazioni=['founder','admin','staff'];
+
+  function readJSON(k, fallback){ try{return JSON.parse(localStorage.getItem(k)) ?? fallback;}catch{return fallback;} }
+  function writeJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+  function safe(s){ return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+  function getV2User(){ return readJSON('sc_v2_user',{name:'', permission:'Admin', online:false, lastSeen:0}); }
+  function now(){ return Date.now(); }
+  function touchPresence(){
+    const u=getV2User();
+    if(!u.name) return;
+    u.online=true; u.lastSeen=now(); writeJSON('sc_v2_user',u);
+    const presence=readJSON('sc_v2_presence',{});
+    presence[u.name.toLowerCase()]={name:u.name, permission:u.permission||'Admin', online:true, lastSeen:now()};
+    writeJSON('sc_v2_presence',presence);
+  }
+  function activePresence(){
+    const presence=readJSON('sc_v2_presence',{});
+    const out={};
+    Object.keys(presence).forEach(k=>{ const p=presence[k]; if(p && p.online && now()-(p.lastSeen||0)<PRESENCE_TTL) out[k]=p; });
+    return out;
+  }
+  window.isMemberOnline = function(m){
+    const p=activePresence();
+    return !!p[String(m.nick||'').toLowerCase()];
+  };
+  window.onlineCount = function(){ return Object.keys(activePresence()).length; };
+  window.setMyPresence = function(status){
+    const u=getV2User(); if(!u.name) return;
+    const presence=readJSON('sc_v2_presence',{});
+    presence[u.name.toLowerCase()]={name:u.name, permission:u.permission||'Admin', online:status!=='offline', lastSeen:now()};
+    writeJSON('sc_v2_presence',presence);
+    u.online=status!=='offline'; u.lastSeen=now(); writeJSON('sc_v2_user',u);
+    if(typeof renderV2==='function') try{renderV2();}catch{}
+  };
+  function canEditEval(){ return ['founder','admin','staff'].includes(window.currentRole||'admin'); }
+
+  function installLogin(){
+    if(window.SCV2){
+      const oldOpen=SCV2.openLogin?.bind(SCV2);
+      SCV2.openLogin=function(){
+        oldOpen && oldOpen();
+        setTimeout(()=>{ const name=document.getElementById('v2LoginName'); if(name){ name.required=true; name.placeholder='Scrivi il tuo nome obbligatorio'; name.value = getV2User().name || ''; name.focus(); } }, 30);
+      };
+      SCV2.login=function(){
+        const nameEl=document.getElementById('v2LoginName');
+        const permEl=document.getElementById('v2LoginPermission');
+        const emailEl=document.getElementById('v2LoginEmail');
+        const name=(nameEl?.value||'').trim();
+        if(!name){ alert('Devi inserire il tuo nome per accedere.'); nameEl?.focus(); return; }
+        const permission=permEl?.value || 'Admin';
+        const email=(emailEl?.value||'').trim();
+        writeJSON('sc_v2_user',{name,permission,email,online:true,lastSeen:now()});
+        window.currentRole = ROLE_MAP[permission] || 'membro';
+        touchPresence();
+        if(typeof log==='function') log('Accesso effettuato','Operatore: '+name+' · '+permission);
+        document.getElementById('v2LoginModal')?.classList.remove('open');
+        try{ if(document.getElementById('navLoginBtn')) document.getElementById('navLoginBtn').style.display='none'; if(document.getElementById('navDashBtn')) document.getElementById('navDashBtn').style.display='inline-flex'; }catch{}
+        if(typeof buildDashNav==='function') buildDashNav();
+        if(typeof switchPanel==='function') switchPanel('panoramica');
+        if(typeof showView==='function') showView('dashboard');
+        const rb=document.getElementById('roleBadge'); if(rb) rb.textContent=permission.toUpperCase();
+        if(typeof renderV2==='function') renderV2();
+      };
+    }
+    window.openLogin=function(){ window.SCV2?.openLogin ? SCV2.openLogin() : document.getElementById('loginModal').style.display='flex'; };
+  }
+
+  function hasAnyAttendance(){ return (window.members||[]).some(m=>(Number(m.pres)||0)+(Number(m.abs)||0)+(Number(m.just)||0)>0); }
+
+  window.renderStats = function(){
+    const panel=document.getElementById('panel-statistiche'); if(!panel) return;
+    if(!hasAnyAttendance()){
+      panel.innerHTML = `<div class="card" style="text-align:center;padding:34px;"><div class="eyebrow">Statistiche</div><h3 style="font-size:22px;margin-bottom:8px;">Nessun appello registrato</h3><p>Le statistiche appariranno automaticamente dopo il primo appello salvato.</p><button class="btn btn-primary btn-sm" style="margin-top:16px;" onclick="switchPanel('appello')">Vai all'appello</button></div>`;
+      return;
+    }
+    const sorted=[...(window.members||[])].map(m=>{ const tot=(m.pres||0)+(m.abs||0); return {...m, pct:tot?Math.round((m.pres||0)/tot*100):0}; }).sort((a,b)=>b.pct-a.pct);
+    panel.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;"><div class="card"><div class="eyebrow">Stato presenza attuale</div><canvas id="chartStats1" height="180"></canvas></div><div class="card"><div class="eyebrow">Classifica presenze</div><canvas id="chartStats2" height="180"></canvas></div></div><div class="card"><div class="eyebrow">Membri con più assenze</div><div id="worstList" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;"></div></div>`;
+    if(window.chartS1) try{chartS1.destroy();}catch{}
+    if(window.chartS2) try{chartS2.destroy();}catch{}
+    const c={pres:members.reduce((s,m)=>s+(m.pres||0),0), abs:members.reduce((s,m)=>s+((m.abs||0)-(m.just||0)),0), just:members.reduce((s,m)=>s+(m.just||0),0)};
+    window.chartS1=new Chart(document.getElementById('chartStats1'),{type:'doughnut',data:{labels:['Presenti','Assenti','Giustificati'],datasets:[{data:[c.pres,c.abs,c.just],backgroundColor:['rgba(52,224,161,.7)','rgba(255,92,114,.7)','rgba(255,176,32,.7)'],borderColor:'rgba(143,184,255,.20)'}]},options:{plugins:{legend:{labels:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}}}}});
+    window.chartS2=new Chart(document.getElementById('chartStats2'),{type:'bar',data:{labels:sorted.slice(0,8).map(m=>m.nick),datasets:[{data:sorted.slice(0,8).map(m=>m.pct),backgroundColor:'rgba(56,182,255,.45)',borderColor:'rgba(143,184,255,.28)',borderWidth:1,borderRadius:5}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{min:0,max:100,grid:{color:'rgba(143,184,255,.08)'},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:10}}},y:{grid:{display:false},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:10}}}}}});
+    const worst=[...members].sort((a,b)=>((b.abs||0)-(b.just||0))-((a.abs||0)-(a.just||0))).slice(0,6);
+    document.getElementById('worstList').innerHTML=worst.map(m=>`<div style="display:flex;justify-content:space-between;border:1px solid var(--border);border-radius:9px;padding:9px 11px;"><span>${safe(m.nick)}</span><span class="mono" style="color:var(--red);">${(m.abs||0)-(m.just||0)} assenze</span></div>`).join('');
+  };
+
+  window.buildCalendar = function(offset, gridId, titleId, clickFn){
+    const base=new Date(); const ref=new Date(base.getFullYear(),base.getMonth()+offset,1); const y=ref.getFullYear(), m=ref.getMonth();
+    if(titleId && document.getElementById(titleId)) document.getElementById(titleId).textContent=MONTHS_IT[m]+' '+y;
+    const grid=document.getElementById(gridId); if(!grid) return; grid.innerHTML='';
+    DAYS_IT.forEach(d=>{ const h=document.createElement('div'); h.className='mono muted'; h.style.cssText='text-align:center;font-size:11px;padding:6px 0;'; h.textContent=d; grid.appendChild(h); });
+    const offsetDays=(new Date(y,m,1).getDay()+6)%7; for(let i=0;i<offsetDays;i++) grid.appendChild(document.createElement('div'));
+    const todayStr=new Date().toISOString().slice(0,10); const days=new Date(y,m+1,0).getDate();
+    for(let d=1; d<=days; d++){
+      const dateStr=new Date(y,m,d).toISOString().slice(0,10); const dayEvents=(window.events||[]).filter(e=>e.date===dateStr);
+      const cell=document.createElement('div'); cell.className='cal-cell';
+      cell.style.cssText=`min-height:${gridId==='calGrid'?'64':'58'}px;border-radius:8px;padding:6px;font-size:12px;cursor:pointer;border:1px solid ${dateStr===todayStr?'var(--ice-500)':'transparent'};background:var(--surface-2);position:relative;overflow:hidden;`;
+      cell.innerHTML=`<div class="mono" style="color:${dateStr===todayStr?'var(--ice-400)':'var(--text-mute)'};margin-bottom:4px;">${d}</div>` + dayEvents.slice(0,3).map((e,idx)=>`<div class="cal-event-pill" style="background:${EVENT_COLOR[e.type]}22;color:${EVENT_COLOR[e.type]};border-radius:4px;padding:2px 5px;font-size:10px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="overflow:hidden;text-overflow:ellipsis;">${safe(e.title)}</span>${gridId==='dashCalGrid'?`<button class="cal-event-delete" title="Rimuovi" onclick="event.stopPropagation();removeCalendarEvent('${dateStr}',${idx})">×</button>`:''}</div>`).join('');
+      cell.onclick=()=>{ if(gridId==='dashCalGrid') showDashEventDetail(dateStr,dayEvents); else if(clickFn) clickFn(dateStr,dayEvents); };
+      grid.appendChild(cell);
+    }
+  };
+  window.calShift=function(dir,isDash){ if(isDash){ window.dashCalOffset=(window.dashCalOffset||0)+dir; renderDashCal(); } else { window.calOffset=(window.calOffset||0)+dir; buildCalendar(window.calOffset||0,'calGrid','calMonthTitle',showEventDetail); } };
+  window.renderDashCal=function(){
+    const panel=document.getElementById('panel-dashcal'); if(panel && !document.getElementById('dashEventDetail')) panel.insertAdjacentHTML('beforeend',`<div id="dashEventDetail" class="card" style="margin-top:14px;"><div class="muted" style="font-size:13px;">Seleziona un giorno per leggere o rimuovere gli eventi.</div></div>`);
+    buildCalendar(window.dashCalOffset||0,'dashCalGrid','dashCalTitle',showDashEventDetail);
+  };
+  window.showDashEventDetail=function(dateStr,dayEvents){
+    const host=document.getElementById('dashEventDetail'); if(!host) return;
+    if(!dayEvents.length){ host.innerHTML=`<div class="muted" style="font-size:13px;">Nessun evento il ${safe(dateStr)}.</div>`; return; }
+    host.innerHTML=`<div class="eyebrow">Eventi del ${safe(dateStr)}</div>`+dayEvents.map((e,i)=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px;"><div><div class="mono" style="font-size:11px;color:${EVENT_COLOR[e.type]};">${({reg:'REGISTRAZIONE',riu:'RIUNIONE',sca:'SCADENZA',evt:'EVENTO'})[e.type]}</div><strong>${safe(e.title)}</strong></div><button class="btn btn-danger btn-sm" onclick="removeCalendarEvent('${dateStr}',${i})">Rimuovi</button></div>`).join('');
+  };
+  window.removeCalendarEvent=function(dateStr,index){
+    const indices=[]; (events||[]).forEach((e,i)=>{ if(e.date===dateStr) indices.push(i); });
+    const real=indices[index]; if(real==null) return; const removed=events.splice(real,1)[0];
+    if(typeof log==='function') log('Evento rimosso', removed?.title||dateStr);
+    renderDashCal(); try{buildCalendar(window.calOffset||0,'calGrid','calMonthTitle',showEventDetail)}catch{}
+    if(typeof toast==='function') toast('Evento rimosso dal calendario');
+  };
+
+  window.renderEvalFeed=function(){
+    const host=document.getElementById('evalFeed'); if(!host) return;
+    const arr=window.evaluations||[];
+    host.innerHTML = arr.length ? arr.map((e,i)=>`<div class="card eval-card" onclick="this.classList.toggle('open')" style="display:flex;gap:12px;align-items:flex-start;"><span style="color:${e.type==='positivo'?'var(--green)':e.type==='negativo'?'var(--red)':'var(--ice-400)'};font-size:18px;">●</span><div style="flex:1;"><div style="font-weight:600;font-size:14px;">${safe(e.member)}</div><div style="font-size:13.5px;margin-top:3px;">${safe(e.body)}</div><div class="muted mono" style="font-size:11px;margin-top:4px;">${safe(e.author)} · ${safe(e.date)}</div><div class="eval-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openProfileByName('${String(e.member).replace(/'/g,"\\'")}')">Apri membro</button>${canEditEval()?`<button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteEval(${i})">Rimuovi</button>`:''}</div></div></div>`).join('') : '<div class="card"><p>Nessuna valutazione presente.</p></div>';
+  };
+  window.deleteEval=function(i){ if(!canEditEval()) return alert('Permesso insufficiente.'); const e=evaluations.splice(i,1)[0]; if(typeof log==='function') log('Valutazione rimossa', e?.member||''); renderEvalFeed(); if(typeof toast==='function') toast('Valutazione rimossa'); };
+  window.openProfileByName=function(name){ const m=(members||[]).find(x=>x.nick===name); if(m){ switchPanel('membri'); setTimeout(()=>openProfile(m.id),60); } };
+
+  const oldRenderV2 = window.renderV2;
+  window.renderV2=function(){
+    try{ oldRenderV2 && oldRenderV2(); }catch(e){ console.warn(e); }
+    const oc=document.getElementById('v2OnlineCount'); if(oc) oc.textContent=String(onlineCount());
+    const roles=document.getElementById('v2Roles');
+    if(roles){
+      const permissions=['Admin','Staff','Moderatore','Membro'];
+      const prod=['ATTORI','DOPPIATORI','DOPP/ATT','GRAFICO','BUILDER','SCRITTORE','Music Production'];
+      roles.innerHTML=[...permissions.map(r=>`<div class="v2-role-chip core">👑 ${r}</div>`),...prod.map(r=>`<div class="v2-role-chip prod">🎬 ${r}</div>`)].join('');
+    }
+    const user=getV2User(); const pill=document.getElementById('v2UserPill');
+    if(pill) pill.innerHTML = user.name ? `<span class="v2-dot online"></span><strong>${safe(user.name)}</strong>&nbsp;·&nbsp;${safe(user.permission)} · Online` : `<span class="v2-dot offline"></span>Accesso richiesto`;
+  };
+
+  function fixFooterVersion(){ const f=document.querySelector('.build-footer'); if(f) f.innerHTML='<strong>Schoolcraft Roleplay 2</strong>&nbsp;·&nbsp;Centro Operativo&nbsp;·&nbsp;v2.0.1'; }
+  document.addEventListener('DOMContentLoaded',()=>{
+    installLogin(); fixFooterVersion(); touchPresence();
+    if(typeof renderV2==='function') renderV2();
+    setInterval(()=>{touchPresence(); if(typeof renderV2==='function') renderV2();}, 30000);
+  });
+})();
+</script>
+
+
+
+<!-- =========================
+     PATCH v2.0.2 — fix layout, calendario, login Owner, ruolo reale, online reali
+========================= -->
+<style id="sc-v2-0-2-style">
+  .v2-grid-main{grid-template-columns:1fr!important;width:100%!important;}
+  #v2Panel .card{min-width:0!important;}
+  #v2Log{max-height:360px!important;overflow:auto!important;padding-right:8px!important;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;}
+  #v2Log::-webkit-scrollbar{width:8px}#v2Log::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px}#v2Log::-webkit-scrollbar-track{background:transparent}
+  .v2-log-row{grid-template-columns:86px 1fr!important;align-items:start;word-break:break-word;}
+  #dashCalGrid .cal-cell.today,#calGrid .cal-cell.today{border-color:var(--ice-500)!important;box-shadow:0 0 0 1px rgba(56,182,255,.22),0 0 22px rgba(56,182,255,.08);}
+  #dashCalGrid .cal-cell.selected,#calGrid .cal-cell.selected{border-color:var(--amber)!important;box-shadow:0 0 0 1px rgba(255,176,32,.20);}
+  #dashCalGrid .cal-cell:not(.today):not(.selected),#calGrid .cal-cell:not(.today):not(.selected){border-color:transparent!important;}
+  @media(max-width:760px){.v2-log-row{grid-template-columns:1fr!important}.v2-grid-main{display:block!important}.v2-grid-main>.card{margin-bottom:14px}}
+</style>
+<script id="sc-v2-0-2-script">
+(function(){
+  const VER='2.0.2';
+  const USER_KEYS=['sc_v2_user','sc_v2_current_user'];
+  const PRESENCE_KEY='sc_v2_presence';
+  const TTL=1000*60*3;
+  const PERM_MAP={Owner:'founder',Founder:'founder',Admin:'admin',Staff:'staff',Moderatore:'staff',Membro:'membro'};
+  const LABEL={founder:'Owner',admin:'Admin',staff:'Staff',membro:'Membro'};
+  function read(k,f){try{return JSON.parse(localStorage.getItem(k))??f}catch{return f}}
+  function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+  function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+  function localDateStr(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+  function getUser(){return read('sc_v2_user',read('sc_v2_current_user',{name:'',permission:'',online:false,lastSeen:0}))}
+  function saveUser(u){USER_KEYS.forEach(k=>write(k,u));localStorage.setItem('sc2_operator_name',u.name||'')}
+  function activePresence(){const p=read(PRESENCE_KEY,{}),t=Date.now(),o={}; Object.keys(p).forEach(k=>{const x=p[k]; if(x&&x.online&&t-(x.lastSeen||0)<TTL)o[k]=x}); return o}
+  function setRoleUI(){
+    const u=getUser();
+    window.currentRole=PERM_MAP[u.permission]||window.currentRole||'membro';
+    const rb=document.getElementById('roleBadge'); if(rb) rb.textContent=(u.permission||LABEL[window.currentRole]||'Membro').toUpperCase();
+    const op=document.querySelector('#dashboardOperatorChip .operator-role'); if(op) op.innerHTML=`${esc(u.permission||LABEL[window.currentRole]||'Membro')} · Online`;
+    const name=document.querySelector('#dashboardOperatorChip .operator-name'); if(name) name.textContent=u.name||'Operatore';
+    const av=document.querySelector('#dashboardOperatorChip .operator-avatar'); if(av) av.textContent=(u.name||'OP').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
+  }
+  function setPresence(status='online'){
+    const u=getUser(); if(!u.name) return;
+    u.online=status!=='offline'; u.lastSeen=Date.now(); saveUser(u);
+    const p=read(PRESENCE_KEY,{}); p[u.name.toLowerCase()]={name:u.name,permission:u.permission||'Membro',online:u.online,lastSeen:u.lastSeen}; write(PRESENCE_KEY,p);
+  }
+  window.onlineCount=function(){return Object.keys(activePresence()).length};
+  window.isMemberOnline=function(m){return !!activePresence()[String(m.nick||'').toLowerCase()]};
+  window.setMyPresence=function(status){setPresence(status); refreshAll()};
+  function normalizeLoginOptions(){
+    const sel=document.getElementById('v2LoginPermission');
+    if(sel) sel.innerHTML='<option>Owner</option><option>Admin</option><option>Staff</option><option>Moderatore</option><option>Membro</option>';
+    const name=document.getElementById('v2LoginName'); if(name){name.required=true;name.placeholder='Nome obbligatorio'; if(!name.value) name.value=getUser().name||'';}
+  }
+  function patchSCV2(){
+    if(!window.SCV2) return;
+    const oldOpen=SCV2.openLogin?.bind(SCV2);
+    SCV2.openLogin=function(){oldOpen&&oldOpen(); setTimeout(normalizeLoginOptions,20)};
+    SCV2.login=function(){
+      normalizeLoginOptions();
+      const name=(document.getElementById('v2LoginName')?.value||'').trim();
+      if(!name){alert('Devi scrivere il tuo nome per accedere.');document.getElementById('v2LoginName')?.focus();return;}
+      const permission=document.getElementById('v2LoginPermission')?.value||'Membro';
+      const email=(document.getElementById('v2LoginEmail')?.value||'').trim();
+      saveUser({name,permission,email,online:true,lastSeen:Date.now()});
+      setPresence('online'); setRoleUI();
+      document.getElementById('v2LoginModal')?.classList.remove('open');
+      if(typeof buildDashNav==='function') buildDashNav();
+      if(typeof showView==='function') showView('dashboard');
+      if(typeof switchPanel==='function') switchPanel('panoramica');
+      if(typeof log==='function') try{log('Accesso effettuato',`${name} · ${permission}`)}catch{}
+      refreshAll();
+    };
+    SCV2.logout=function(){setPresence('offline'); USER_KEYS.forEach(k=>localStorage.removeItem(k)); refreshAll();};
+  }
+  function todayBase(offset){const d=new Date(); return new Date(d.getFullYear(),d.getMonth()+offset,1)}
+  window.buildCalendar=function(offset=0, gridId='calGrid', titleId='calMonthTitle', clickFn){
+    const ref=todayBase(offset), y=ref.getFullYear(), m=ref.getMonth();
+    const monthNames=window.MONTHS_IT||['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    const dayNames=window.DAYS_IT||['L','M','M','G','V','S','D'];
+    if(document.getElementById(titleId)) document.getElementById(titleId).textContent=`${monthNames[m]} ${y}`;
+    const grid=document.getElementById(gridId); if(!grid) return; grid.innerHTML='';
+    dayNames.forEach(d=>{const h=document.createElement('div');h.className='mono muted';h.style.cssText='text-align:center;font-size:11px;padding:6px 0;';h.textContent=d;grid.appendChild(h)});
+    const first=(new Date(y,m,1).getDay()+6)%7; for(let i=0;i<first;i++)grid.appendChild(document.createElement('div'));
+    const today=localDateStr(new Date()), days=new Date(y,m+1,0).getDate();
+    for(let d=1;d<=days;d++){
+      const ds=localDateStr(new Date(y,m,d)); const ev=(window.events||[]).filter(e=>e.date===ds);
+      const cell=document.createElement('div'); cell.className='cal-cell'+(ds===today?' today':'');
+      cell.dataset.date=ds;
+      cell.style.cssText=`min-height:${gridId==='calGrid'?'64':'58'}px;border-radius:8px;padding:6px;font-size:12px;cursor:pointer;background:var(--surface-2);position:relative;overflow:hidden;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease;`;
+      cell.innerHTML=`<div class="mono" style="color:${ds===today?'var(--ice-400)':'var(--text-mute)'};margin-bottom:4px;">${d}</div>`+ev.slice(0,3).map((e,i)=>`<div class="cal-event-pill" style="background:${(window.EVENT_COLOR||{})[e.type]||'var(--ice-500)'}22;color:${(window.EVENT_COLOR||{})[e.type]||'var(--ice-500)'};border-radius:4px;padding:2px 5px;font-size:10px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span>${esc(e.title)}</span><button class="cal-event-delete" onclick="event.stopPropagation();removeCalendarEvent('${ds}',${i})">×</button></div>`).join('');
+      cell.onclick=()=>{grid.querySelectorAll('.cal-cell').forEach(x=>x.classList.remove('selected'));cell.classList.add('selected'); if(gridId==='dashCalGrid') showDashEventDetail(ds,ev); else if(clickFn) clickFn(ds,ev); else if(typeof showEventDetail==='function') showEventDetail(ds,ev)};
+      grid.appendChild(cell);
+    }
+  };
+  window.calShift=function(dir,isDash){ if(isDash){window.dashCalOffset=(window.dashCalOffset||0)+dir; renderDashCal()} else {window.calOffset=(window.calOffset||0)+dir; buildCalendar(window.calOffset,'calGrid','calMonthTitle',window.showEventDetail)}};
+  window.renderDashCal=function(){
+    const p=document.getElementById('panel-dashcal'); if(p&&!document.getElementById('dashEventDetail')) p.insertAdjacentHTML('beforeend','<div id="dashEventDetail" class="card" style="margin-top:14px;"><div class="muted" style="font-size:13px;">Seleziona un giorno per leggere o rimuovere gli eventi.</div></div>');
+    buildCalendar(window.dashCalOffset||0,'dashCalGrid','dashCalTitle',window.showDashEventDetail);
+  };
+  window.removeCalendarEvent=function(dateStr,index){
+    const indexes=[];(window.events||[]).forEach((e,i)=>{if(e.date===dateStr)indexes.push(i)});const real=indexes[index];if(real==null)return;const rem=events.splice(real,1)[0];
+    try{localStorage.setItem('sc_events',JSON.stringify(events))}catch{}
+    if(typeof log==='function')try{log('Evento rimosso',rem?.title||dateStr)}catch{}
+    renderDashCal(); buildCalendar(window.calOffset||0,'calGrid','calMonthTitle',window.showEventDetail);
+  };
+  const oldRenderV2=window.renderV2;
+  window.renderV2=function(){
+    try{oldRenderV2&&oldRenderV2()}catch(e){}
+    const u=getUser(); setRoleUI();
+    const oc=document.getElementById('v2OnlineCount'); if(oc) oc.textContent=String(onlineCount());
+    const pnow=document.getElementById('v2PermissionNow'); if(pnow) pnow.textContent=u.permission||'—';
+    const pill=document.getElementById('v2UserPill'); if(pill) pill.innerHTML=u.name?`<span class="v2-dot online"></span><strong>${esc(u.name)}</strong>&nbsp;·&nbsp;${esc(u.permission)} · Online`:`<span class="v2-dot offline"></span>Accesso richiesto`;
+    const roles=document.getElementById('v2Roles'); if(roles){const perms=['Owner','Admin','Staff','Moderatore','Membro'], prod=['ATTORI','DOPPIATORI','DOPP/ATT','GRAFICO','BUILDER','SCRITTORE','Music Production'];roles.innerHTML=[...perms.map(r=>`<div class="v2-role-chip core">👑 ${r}</div>`),...prod.map(r=>`<div class="v2-role-chip prod">🎬 ${r}</div>`)].join('')}
+  };
+  function refreshAll(){
+    try{renderV2&&renderV2()}catch{}; try{renderOverview&&renderOverview()}catch{}; try{renderMembri&&renderMembri()}catch{}; try{renderDashCal&&renderDashCal()}catch{}; setRoleUI();
+  }
+  document.addEventListener('DOMContentLoaded',()=>{
+    patchSCV2(); normalizeLoginOptions();
+    const u=getUser(); if(u.name){setPresence('online')} else {localStorage.removeItem(PRESENCE_KEY);}
+    const f=document.querySelector('.build-footer'); if(f) f.innerHTML='<strong>Schoolcraft Roleplay 2</strong>&nbsp;·&nbsp;Centro Operativo&nbsp;·&nbsp;v2.0.2';
+    const bt=document.getElementById('buildTag'); if(bt) bt.textContent='Schoolcraft Roleplay 2 · Centro Operativo · v2.0.2';
+    refreshAll();
+    setInterval(()=>{if(getUser().name){setPresence('online'); refreshAll()}},30000);
+  });
+  window.addEventListener('beforeunload',()=>{try{setPresence('offline')}catch{}});
+})();
 </script>
 
 </body>
