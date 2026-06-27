@@ -7,6 +7,25 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script id="sc-safe-chart-guard">
+(function(){
+  window.SafeChart = function(ctx, cfg){
+    if(window.Chart){ return new window.Chart(ctx, cfg); }
+    try{
+      const canvas = (ctx && ctx.canvas) ? ctx.canvas : ctx;
+      if(canvas && canvas.parentElement && !canvas.parentElement.querySelector('.chart-fallback')){
+        const msg=document.createElement('div');
+        msg.className='chart-fallback muted mono';
+        msg.style.cssText='font-size:12px;padding:14px;border:1px solid var(--border);border-radius:10px;margin-top:8px;';
+        msg.textContent='Grafico non disponibile: libreria Chart.js bloccata dal browser. Il pannello funziona comunque.';
+        canvas.parentElement.appendChild(msg);
+      }
+    }catch(e){}
+    return {destroy:function(){}};
+  };
+})();
+</script>
+
 <style>
 :root{
   --bg:#070B14;
@@ -717,7 +736,7 @@ function renderOverview(){
   ].map(r=>`<div><span style="color:var(--ice-400);">›</span> <strong style="color:var(--text); font-family:var(--font-body); font-weight:600;">${r[0]}</strong><br><span class="muted">${r[1]}</span></div>`).join('');
   const ctx = document.getElementById('chartOverview');
   if(chartOverviewInst) chartOverviewInst.destroy();
-  chartOverviewInst = new Chart(ctx, {
+  chartOverviewInst = new SafeChart(ctx, {
     type:'line',
     data:{ labels:Array.from({length:10},(_,i)=>'Ep.'+(i+1)),
       datasets:[{ label:'Presenza media %', data:[82,85,84,88,87,90,89,92,90,91], borderColor:'#38B6FF', backgroundColor:'rgba(56,182,255,0.12)', tension:.4, fill:true, pointRadius:0, borderWidth:2 }] },
@@ -822,7 +841,7 @@ function openProfile(id){
       </div>` : ''}
     </div>`;
   if(chartProfileInst) chartProfileInst.destroy();
-  chartProfileInst = new Chart(document.getElementById('chartProfile'), {
+  chartProfileInst = new SafeChart(document.getElementById('chartProfile'), {
     type:'line',
     data:{ labels:Array.from({length:m.history.length},(_,i)=>'S'+(i+1)),
       datasets:[{ data:m.history, borderColor:'#6FE3FF', backgroundColor:'rgba(111,227,255,0.1)', tension:.4, fill:true, pointRadius:0, borderWidth:2 }] },
@@ -998,14 +1017,14 @@ function renderEvalFeed(){
 let chartS1=null, chartS2=null;
 function renderStats(){
   if(chartS1) chartS1.destroy();
-  chartS1 = new Chart(document.getElementById('chartStats1'), {
+  chartS1 = new SafeChart(document.getElementById('chartStats1'), {
     type:'line', data:{ labels:Array.from({length:10},(_,i)=>'Ep.'+(i+1)),
       datasets:[{ data:[82,85,84,88,87,90,89,92,90,91], borderColor:'#38B6FF', backgroundColor:'rgba(56,182,255,0.12)', tension:.4, fill:true, pointRadius:0, borderWidth:2 }] },
     options:{ plugins:{legend:{display:false}}, scales:{ y:{min:60,max:100, grid:{color:'rgba(143,184,255,0.08)'}, ticks:{color:'#9FB3D9', font:{family:'JetBrains Mono', size:10}}}, x:{grid:{display:false}, ticks:{color:'#9FB3D9', font:{family:'JetBrains Mono', size:10}}} } }
   });
   const sorted = [...members].sort((a,b)=> (b.pres/(b.pres+b.abs)) - (a.pres/(a.pres+a.abs)) );
   if(chartS2) chartS2.destroy();
-  chartS2 = new Chart(document.getElementById('chartStats2'), {
+  chartS2 = new SafeChart(document.getElementById('chartStats2'), {
     type:'bar', data:{ labels:sorted.map(m=>m.nick),
       datasets:[{ data:sorted.map(m=>Math.round(m.pres/(m.pres+m.abs)*100)), backgroundColor:sorted.map((_,i)=> i<2?'#34E0A1':'#38B6FF'), borderRadius:5 }] },
     options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{min:0,max:100, grid:{color:'rgba(143,184,255,0.08)'}, ticks:{color:'#9FB3D9', font:{family:'JetBrains Mono', size:10}}}, y:{grid:{display:false}, ticks:{color:'#9FB3D9', font:{family:'JetBrains Mono', size:10}}} } }
@@ -1419,7 +1438,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
       if(ctx){
         if(window.chartOverviewInst) window.chartOverviewInst.destroy();
         const base = [c.online, c.pres, c.abs, c.just];
-        window.chartOverviewInst = new Chart(ctx, {type:'bar',data:{labels:['Online','Presenti','Assenti','Giust.'],datasets:[{data:base, borderWidth:1, borderColor:'rgba(143,184,255,.28)', backgroundColor:'rgba(56,182,255,.18)'}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(143,184,255,.08)'},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}},x:{grid:{display:false},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}}}}});
+        window.chartOverviewInst = new SafeChart(ctx, {type:'bar',data:{labels:['Online','Presenti','Assenti','Giust.'],datasets:[{data:base, borderWidth:1, borderColor:'rgba(143,184,255,.28)', backgroundColor:'rgba(56,182,255,.18)'}]},options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'rgba(143,184,255,.08)'},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}},x:{grid:{display:false},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}}}}});
       }
     }
   };
@@ -1853,8 +1872,8 @@ window.addEventListener('beforeunload',()=>{ try{setMyPresence('offline')}catch{
     if(window.chartS1) try{chartS1.destroy();}catch{}
     if(window.chartS2) try{chartS2.destroy();}catch{}
     const c={pres:members.reduce((s,m)=>s+(m.pres||0),0), abs:members.reduce((s,m)=>s+((m.abs||0)-(m.just||0)),0), just:members.reduce((s,m)=>s+(m.just||0),0)};
-    window.chartS1=new Chart(document.getElementById('chartStats1'),{type:'doughnut',data:{labels:['Presenti','Assenti','Giustificati'],datasets:[{data:[c.pres,c.abs,c.just],backgroundColor:['rgba(52,224,161,.7)','rgba(255,92,114,.7)','rgba(255,176,32,.7)'],borderColor:'rgba(143,184,255,.20)'}]},options:{plugins:{legend:{labels:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}}}}});
-    window.chartS2=new Chart(document.getElementById('chartStats2'),{type:'bar',data:{labels:sorted.slice(0,8).map(m=>m.nick),datasets:[{data:sorted.slice(0,8).map(m=>m.pct),backgroundColor:'rgba(56,182,255,.45)',borderColor:'rgba(143,184,255,.28)',borderWidth:1,borderRadius:5}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{min:0,max:100,grid:{color:'rgba(143,184,255,.08)'},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:10}}},y:{grid:{display:false},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:10}}}}}});
+    window.chartS1=new SafeChart(document.getElementById('chartStats1'),{type:'doughnut',data:{labels:['Presenti','Assenti','Giustificati'],datasets:[{data:[c.pres,c.abs,c.just],backgroundColor:['rgba(52,224,161,.7)','rgba(255,92,114,.7)','rgba(255,176,32,.7)'],borderColor:'rgba(143,184,255,.20)'}]},options:{plugins:{legend:{labels:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:11}}}}}});
+    window.chartS2=new SafeChart(document.getElementById('chartStats2'),{type:'bar',data:{labels:sorted.slice(0,8).map(m=>m.nick),datasets:[{data:sorted.slice(0,8).map(m=>m.pct),backgroundColor:'rgba(56,182,255,.45)',borderColor:'rgba(143,184,255,.28)',borderWidth:1,borderRadius:5}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{min:0,max:100,grid:{color:'rgba(143,184,255,.08)'},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:10}}},y:{grid:{display:false},ticks:{color:'#9FB3D9',font:{family:'JetBrains Mono',size:10}}}}}});
     const worst=[...members].sort((a,b)=>((b.abs||0)-(b.just||0))-((a.abs||0)-(a.just||0))).slice(0,6);
     document.getElementById('worstList').innerHTML=worst.map(m=>`<div style="display:flex;justify-content:space-between;border:1px solid var(--border);border-radius:9px;padding:9px 11px;"><span>${safe(m.nick)}</span><span class="mono" style="color:var(--red);">${(m.abs||0)-(m.just||0)} assenze</span></div>`).join('');
   };
@@ -2049,6 +2068,74 @@ window.addEventListener('beforeunload',()=>{ try{setMyPresence('offline')}catch{
     setInterval(()=>{if(getUser().name){setPresence('online'); refreshAll()}},30000);
   });
   window.addEventListener('beforeunload',()=>{try{setPresence('offline')}catch{}});
+})();
+</script>
+
+
+
+<!-- =========================
+     PATCH v2.0.3 — Chart guard, registro fermo, permessi stabili
+========================= -->
+<style id="sc-v2-0-3-style">
+  #v2Log{max-height:none!important;overflow:visible!important;padding-right:0!important;}
+  .v2-log-row{grid-template-columns:90px 1fr!important;}
+  .v2-role-chip{transition:none!important;animation:none!important;box-shadow:none!important;}
+  .v2-role-chip.core{background:rgba(16,34,43,.72)!important;border-color:rgba(52,224,161,.28)!important;color:var(--green)!important;}
+  .v2-role-chip.prod{background:rgba(17,31,54,.72)!important;border-color:rgba(111,227,255,.24)!important;color:var(--ice-300)!important;}
+  .v2-role-chip:hover{transform:none!important;filter:none!important;}
+  .chart-fallback{display:block;}
+</style>
+<script id="sc-v2-0-3-script">
+(function(){
+  const VER='2.0.3';
+  const LOG_KEY='sc_v2_audit_log';
+  function read(k,f){try{return JSON.parse(localStorage.getItem(k))??f}catch{return f}}
+  function write(k,v){localStorage.setItem(k,JSON.stringify(v))}
+  function cleanAutoLogs(){
+    const bad=['Sistema v2.0 avviato','Operatore online','Sistema salvato','Tutto salvato'];
+    const logs=read(LOG_KEY,[]).filter(x=>!bad.includes(x.action));
+    write(LOG_KEY,logs.slice(0,12));
+  }
+  function renderStableRoles(){
+    const roles=document.getElementById('v2Roles');
+    if(!roles) return;
+    const html=[
+      ...['Owner','Admin','Staff','Moderatore','Membro'].map(r=>`<div class="v2-role-chip core">👑 ${r}</div>`),
+      ...['ATTORI','DOPPIATORI','DOPP/ATT','GRAFICO','BUILDER','SCRITTORE','Music Production'].map(r=>`<div class="v2-role-chip prod">🎬 ${r}</div>`)
+    ].join('');
+    if(roles.dataset.renderedV203!=='1' || roles.innerHTML.trim()!==html){
+      roles.innerHTML=html;
+      roles.dataset.renderedV203='1';
+    }
+  }
+  function renderStableLog(){
+    cleanAutoLogs();
+    const host=document.getElementById('v2Log');
+    if(!host) return;
+    const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const logs=read(LOG_KEY,[]).slice(0,10);
+    host.innerHTML=logs.length?logs.map(x=>`<div class="v2-log-row"><div class="mono muted">${esc(x.time)}</div><div><strong>${esc(x.by)}</strong> <span class="muted mono">${esc(x.role)}</span><br><span>${esc(x.action)}</span>${x.details?`<p style="margin-top:4px;">${esc(x.details)}</p>`:''}</div></div>`).join(''):'<p>Nessuna modifica manuale recente.</p>';
+  }
+  const oldRender=window.renderV2;
+  window.renderV2=function(){
+    try{ oldRender && oldRender(); }catch(e){ console.warn('renderV2 protetto:', e); }
+    renderStableRoles();
+    renderStableLog();
+    const f=document.querySelector('.build-footer'); if(f) f.innerHTML='<strong>Schoolcraft Roleplay 2</strong>&nbsp;·&nbsp;Centro Operativo&nbsp;·&nbsp;v2.0.3';
+    const bt=document.getElementById('buildTag'); if(bt) bt.textContent='Schoolcraft Roleplay 2 · Centro Operativo · v2.0.3';
+  };
+  // Evita che il registro si riempia da solo al caricamento pagina.
+  document.addEventListener('DOMContentLoaded',()=>{
+    cleanAutoLogs(); renderStableRoles(); renderStableLog();
+    try{window.renderV2()}catch(e){}
+  });
+  // Se Chart.js viene bloccato dal browser, nessuna funzione deve andare in errore.
+  window.addEventListener('error', function(ev){
+    if(String(ev.message||'').includes('Chart is not defined')){
+      ev.preventDefault();
+      try{ if(typeof window.renderOverview==='function') window.renderOverview(); }catch(e){}
+    }
+  });
 })();
 </script>
 
