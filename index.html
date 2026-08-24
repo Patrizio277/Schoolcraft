@@ -1378,6 +1378,17 @@ async function saveThreadAdmin(id){
     toast(patch.locked?'Discussione bloccata':'Discussione aggiornata');
   }catch(e){console.error(e);toast('Errore durante il salvataggio della discussione')}
 }
+async function repairStaffSession(){
+  try{
+    if(window.firebaseBridge)await window.firebaseBridge.logout();
+  }catch(e){console.error(e)}
+  user=null;
+  saveSession();
+  closeModal('genericModal');
+  renderAccounts();
+  openLogin();
+  toast('Accedi di nuovo con il tuo account Staff');
+}
 async function deleteThreadFromAdmin(id){
   if(!isStaff())return;
   if(!confirm('Vuoi eliminare definitivamente questa discussione e rimuoverla dal Forum?'))return;
@@ -1395,7 +1406,9 @@ async function deleteThreadFromAdmin(id){
       openGeneric('Sessione Staff da riconnettere',`
         <div class="notice">
           Il pannello ti riconosce come Staff, ma Firebase non sta usando in questo momento la sessione Staff corretta.
-          <br><br><strong>Esci dall'account Staff e accedi di nuovo</strong>, poi riprova a eliminare la discussione.
+          <br><br><strong>Questa è una sessione rimasta dalla versione precedente.</strong><br><br>
+          Premi il pulsante qui sotto: verrai disconnesso correttamente da Firebase e potrai fare un nuovo accesso Staff. Dopo quel nuovo accesso la sessione resterà sincronizzata anche ai prossimi caricamenti.
+          <div style="margin-top:14px"><button class="btn primary" onclick="repairStaffSession()">Riconnetti account Staff</button></div>
         </div>`);
     }else if(code.includes('permission-denied')){
       openGeneric('Eliminazione bloccata da Firebase',`
@@ -1591,7 +1604,13 @@ function isStaffProfile(p){return !!p&&p.active===true&&['owner','admin'].includ
 async function profileFor(uid){try{const snap=await getDoc(doc(db,'staff',uid));return snap.exists()?{uid,...snap.data()}:null}catch(e){return null}}
 async function ensureAnonymous(){
   if(!auth)throw new Error('auth/not-ready');
-  if(auth.currentUser)return auth.currentUser;
+
+  // Se Firebase ha già un utente autenticato (Staff o anonimo), non sostituirlo.
+  if(auth.currentUser){
+    window.communityUid=auth.currentUser.uid;
+    return auth.currentUser;
+  }
+
   const cred=await signInAnonymously(auth);
   window.communityUid=cred.user.uid;
   return cred.user;
@@ -1624,10 +1643,10 @@ async function init(){
      window.onCloudStatus?.(true,false);
    }
   });
-  const bootUser=await ensureAnonymous();
-  window.communityUid=bootUser.uid;
-  await refreshCommunityData(false);
-  window.onCloudStatus?.(true,false)
+  // NON creare subito una sessione anonima qui.
+  // Firebase deve prima avere il tempo di ripristinare un eventuale account Staff
+  // già autenticato. onAuthStateChanged gestirà da solo il caso senza utente.
+  window.onCloudStatus?.(true,!!currentProfile)
  }catch(e){console.error('Firebase init error',e);window.onCloudStatus?.(false,false)}
 }
 function subscribePublic(){if(unsubPublic)unsubPublic();unsubPublic=onSnapshot(doc(db,'portal_public','main'),snap=>{if(snap.exists())window.applyPublicCloud?.(snap.data())},e=>console.error('Public cloud listener',e))}
@@ -1696,7 +1715,18 @@ async function logout(){
 }
 async function saveState(s){if(!auth?.currentUser||!currentProfile)throw new Error('Non autenticato');const publicData={members:s.members||[],events:s.events||[],changes:s.changes||[],gallery:s.gallery||[],rules:s.rules||'',rulesUpdated:s.rulesUpdated||null,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};const privateData={attendance:s.attendance||{},attendanceHistory:s.attendanceHistory||[],reminders:s.reminders||[],evaluations:s.evaluations||[],rooms:s.rooms||[],updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};await Promise.all([setDoc(doc(db,'portal_public','main'),publicData,{merge:true}),setDoc(doc(db,'portal_private','main'),privateData,{merge:true})])}
 async function reload(){const pub=await getDoc(doc(db,'portal_public','main'));if(pub.exists())window.applyPublicCloud?.(pub.data());if(currentProfile){const pri=await getDoc(doc(db,'portal_private','main'));if(pri.exists())window.applyPrivateCloud?.(pri.data())}}
-window.firebaseBridge={login,logout,saveState,reload};
+async function getSessionState(){
+  const fbUser=auth?.currentUser||null;
+  if(!fbUser)return {authenticated:false,staff:false,uid:null};
+  const profile=await profileFor(fbUser.uid);
+  return {
+    authenticated:true,
+    staff:isStaffProfile(profile),
+    uid:fbUser.uid,
+    profile
+  };
+}
+window.firebaseBridge={login,logout,saveState,reload,getSessionState};
 
 async function createThread(data){
   const fbUser=await ensureAnonymous();
