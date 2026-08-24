@@ -161,6 +161,87 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
 }
 </style>
 
+
+<style id="schoolcraft-forum-chat-v711">
+.forum-chat-shell{
+  max-width:920px;margin:0 auto;border:1px solid var(--line);border-radius:22px;
+  overflow:hidden;background:#07131f;box-shadow:0 24px 70px rgba(0,0,0,.24)
+}
+.forum-chat-header{
+  display:flex;align-items:center;gap:12px;padding:13px 16px;
+  background:linear-gradient(180deg,#0d2134,#0a1a2a);
+  border-bottom:1px solid var(--line);position:sticky;top:70px;z-index:10
+}
+.forum-chat-header .mc-avatar{width:43px;height:43px}
+.forum-chat-header-main{min-width:0;flex:1}
+.forum-chat-header-main h3{margin:0;font-family:"Space Grotesk";font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.forum-chat-header-main small{display:block;color:var(--muted);margin-top:3px;font-size:.68rem}
+.forum-chat-header-actions{display:flex;gap:6px}
+.forum-chat-info{
+  padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.055);
+  background:rgba(77,214,255,.025);font-size:.75rem;color:var(--muted)
+}
+.forum-chat-messages{
+  min-height:390px;max-height:62vh;overflow-y:auto;padding:18px 16px 24px;
+  background:
+    radial-gradient(circle at 15% 0%,rgba(55,136,255,.055),transparent 30%),
+    linear-gradient(rgba(255,255,255,.012),rgba(255,255,255,.012)),
+    #06111d;
+  display:flex;flex-direction:column;gap:10px
+}
+.forum-chat-day{
+  align-self:center;padding:5px 9px;border-radius:8px;background:#0c2133;
+  color:#8ba4b8;font-size:.62rem;border:1px solid rgba(255,255,255,.05)
+}
+.chat-bubble-row{display:flex;align-items:flex-end;gap:7px;max-width:84%}
+.chat-bubble-row.mine{align-self:flex-end;flex-direction:row-reverse}
+.chat-bubble-row.other{align-self:flex-start}
+.chat-bubble-avatar{width:28px;height:28px;border-radius:7px;object-fit:cover;flex:0 0 auto}
+.chat-bubble{
+  position:relative;border:1px solid rgba(255,255,255,.06);border-radius:14px 14px 14px 4px;
+  background:#0d2133;padding:9px 11px 7px;min-width:110px;box-shadow:0 6px 18px rgba(0,0,0,.10)
+}
+.chat-bubble-row.mine .chat-bubble{
+  border-radius:14px 14px 4px 14px;background:linear-gradient(145deg,rgba(36,116,143,.38),rgba(31,75,118,.40));
+  border-color:rgba(77,214,255,.18)
+}
+.chat-bubble-author{font-size:.66rem;font-weight:800;color:var(--cyan);margin-bottom:4px}
+.chat-bubble-row.mine .chat-bubble-author{color:#b7edff}
+.chat-bubble-text{white-space:pre-wrap;line-height:1.52;font-size:.84rem;word-break:break-word}
+.chat-bubble-meta{display:flex;justify-content:flex-end;align-items:center;gap:5px;color:#70889b;font-size:.56rem;margin-top:5px}
+.chat-bubble-actions{display:flex;gap:4px;margin-top:6px;justify-content:flex-end}
+.chat-bubble-actions button{border:0;background:transparent;color:#8fa8ba;font-size:.6rem;padding:3px 4px}
+.chat-bubble-actions button:hover{color:#fff}
+.chat-original{
+  align-self:flex-start;max-width:88%;border:1px solid rgba(155,123,255,.18);
+  border-radius:15px;padding:11px 13px;background:linear-gradient(145deg,rgba(72,55,126,.16),rgba(12,32,50,.88))
+}
+.chat-original .chat-bubble-text{font-size:.86rem}
+.forum-chat-composer{
+  display:grid;grid-template-columns:1fr auto;gap:9px;padding:12px;
+  background:#0a1a29;border-top:1px solid var(--line);align-items:end
+}
+.forum-chat-composer textarea{
+  min-height:44px!important;max-height:130px;resize:none;border-radius:16px;padding:12px 14px
+}
+.forum-send-btn{
+  width:46px;height:46px;border-radius:50%;border:0;background:linear-gradient(135deg,var(--cyan),var(--blue));
+  color:#03111c;font-size:1.05rem;font-weight:900;display:grid;place-items:center;
+  box-shadow:0 8px 22px rgba(55,136,255,.22)
+}
+.thread-card{transition:.18s}.thread-card:hover{transform:translateY(-2px);border-color:rgba(77,214,255,.28)}
+.thread-card .thread-title:after{content:"  ›";color:var(--cyan)}
+.forum-refresh-btn{white-space:nowrap}
+@media(max-width:760px){
+ .forum-chat-shell{border-radius:0;margin-left:-11px;margin-right:-11px;border-left:0;border-right:0}
+ .forum-chat-header{top:64px;padding:10px 11px}
+ .forum-chat-header-actions .btn span{display:none}
+ .forum-chat-messages{max-height:64vh;padding:14px 9px 20px}
+ .chat-bubble-row{max-width:93%}
+ .chat-original{max-width:94%}
+}
+</style>
+
 </head>
 <body>
 
@@ -781,7 +862,13 @@ function renderForum(){
 function openForumCategory(k){forumRoute=k;renderForum();scrollTo(0,0)}
 function forumBack(){if(forumRoute.startsWith('thread:')){const id=forumRoute.slice(7),t=[...state.forumPublic,...state.forumPrivate].find(x=>x.id===id);forumRoute=t?.category||''}else forumRoute='';renderForum();scrollTo(0,0)}
 function threadListFor(k){const c=FORUM_CATEGORIES[k];return (c.privacy==='public'?state.forumPublic:state.forumPrivate).filter(t=>t.category===k).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))}
-function renderForumCategory(k){const c=FORUM_CATEGORIES[k];if(!c)return forumRoute='',renderForum();const list=threadListFor(k),box=document.getElementById('forumContent');box.innerHTML=`<div class="breadcrumbs"><button onclick="forumRoute='';renderForum()">Forum</button><span>›</span><strong>${c.title}</strong></div><div class="forum-toolbar"><div><div class="eyebrow">${c.visibility}</div><h2 style="margin:5px 0">${c.icon} ${c.title}</h2><p class="muted" style="max-width:720px">${c.desc}</p></div><button class="btn primary" onclick="openNewThread('${k}')">+ Nuova discussione</button></div>${k==='lounge'?`<div class="card" style="margin-bottom:14px"><div class="role">Categorie suggerite</div><div class="toolbar" style="margin-top:9px">${LOUNGE_TOPICS.map(x=>`<span class="tag">${x}</span>`).join('')}</div></div>`:''}<div>${list.length?list.map(threadCard).join(''):'<div class="empty">Nessuna discussione in questa sezione.</div>'}</div>`}
+function renderForumCategory(k){const c=FORUM_CATEGORIES[k];if(!c)return forumRoute='',renderForum();const list=threadListFor(k),box=document.getElementById('forumContent');box.innerHTML=`<div class="breadcrumbs"><button onclick="forumRoute='';renderForum()">Forum</button><span>›</span><strong>${c.title}</strong></div><div class="forum-toolbar"><div><div class="eyebrow">${c.visibility}</div><h2 style="margin:5px 0">${c.icon} ${c.title}</h2><p class="muted" style="max-width:720px">${c.desc}</p></div><div class="toolbar"><button class="btn" onclick="refreshForumCategory('${k}')">↻ Aggiorna</button><button class="btn primary" onclick="openNewThread('${k}')">+ Nuova discussione</button></div></div>${k==='lounge'?`<div class="card" style="margin-bottom:14px"><div class="role">Categorie suggerite</div><div class="toolbar" style="margin-top:9px">${LOUNGE_TOPICS.map(x=>`<span class="tag">${x}</span>`).join('')}</div></div>`:''}<div>${list.length?list.map(threadCard).join(''):'<div class="empty">Nessuna discussione in questa sezione.</div>'}</div>`}
+async function refreshForumCategory(k){
+  try{
+    await window.communityBridge?.refreshCommunityData?.(isStaff());
+    forumRoute=k;renderForum();toast('Discussioni aggiornate');
+  }catch(e){console.error(e);toast('Errore aggiornamento Forum')}
+}
 function threadCard(t){const votes=(t.votes||[]).length,replies=(state.communityReplies[t.id]||[]).length;return `<article class="thread-card" onclick="openThread('${t.id}')"><div class="authorline"><img class="mc-avatar" src="${mcHead(t.minecraft)}"><div><div class="thread-meta"><strong>${esc(t.authorName||'Utente')}</strong><span>•</span><span>${esc(t.minecraft||'Steve')}</span><span>•</span><span>${fmtDate(t.createdAt)}</span></div><div class="thread-title">${esc(t.title)}</div></div></div><div class="thread-stats"><span class="status-chip">${esc(t.status||'Aperta')}</span><span>💬 ${replies} risposte</span>${t.category==='proposals'?`<span>👍 ${votes} voti</span>`:''}${t.locked?'<span>🔒 Chiusa</span>':''}</div></article>`}
 function openNewThread(k){ensureCommunityProfile(()=>{const c=FORUM_CATEGORIES[k];let extra='';if(k==='bugs')extra=`<div class="field"><label>Area interessata</label><select id="ftArea" class="input"><option>Server</option><option>Sito</option><option>Discord</option><option>Launcher</option></select></div><div class="field"><label>Come riprodurre il problema</label><textarea id="ftRepro" class="input"></textarea></div><div class="field"><label>Screenshot / video (URL, facoltativo)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Data e ora approssimativa</label><input id="ftWhen" class="input" type="datetime-local"></div>`;if(k==='players')extra=`<div class="field"><label>Giocatore segnalato</label><input id="ftTarget" class="input"></div><div class="field"><label>Motivazione</label><select id="ftReason" class="input"><option>RDM</option><option>VDM</option><option>FailRP</option><option>Toxicity</option><option>Altro</option></select></div><div class="field"><label>Data e ora</label><input id="ftWhen" class="input" type="datetime-local"></div><div class="field"><label>Prove screenshot/video (URL)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Eventuali testimoni</label><input id="ftWitness" class="input"></div>`;if(k==='lounge')extra=`<div class="field"><label>Area del Salotto</label><select id="ftTopic" class="input">${LOUNGE_TOPICS.map(x=>`<option>${x}</option>`).join('')}</select></div>`;openGeneric(`Nuova discussione · ${c.title}`,`<div class="field"><label>Nickname Minecraft</label><input class="input" value="${esc(communityProfile?.minecraft||user?.name||'')}" disabled></div><div class="field"><label>Titolo</label><input id="ftTitle" class="input" placeholder="Titolo chiaro e descrittivo"></div><div class="field"><label>Descrizione</label><textarea id="ftBody" class="input" placeholder="Scrivi tutti i dettagli utili..."></textarea></div>${extra}<button class="btn primary" onclick="createThread('${k}')">Pubblica / Invia</button>`)});}
 async function createThread(k){
@@ -794,15 +881,18 @@ async function createThread(k){
   if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Pubblicazione...'}
   try{
     if(!window.communityBridge)throw new Error('community/not-ready');
-    await window.communityBridge.createThread({category:k,visibility:c.privacy,title,body,authorName,minecraft,status:c.statuses[0],locked:false,assignedTo:'',...extra});
+    const created=await window.communityBridge.createThread({category:k,visibility:c.privacy,title,body,authorName,minecraft,status:c.statuses[0],locked:false,assignedTo:'',...extra});
     closeModal('genericModal');
     scSound?.('success');
     toast('Discussione pubblicata correttamente');
+    forumRoute='thread:'+created.id;
+    renderForum();
+    setTimeout(()=>document.getElementById('forumChatMessages')?.scrollTo({top:999999,behavior:'smooth'}),80);
   }catch(e){
     console.error('Forum create error:',e);
     const code=String(e?.code||e?.message||'');
     let msg='Errore durante la pubblicazione.';
-    if(code.includes('INTERNAL ASSERTION FAILED'))msg='Errore interno Firestore rilevato. La V7.10 usa una modalità Forum più stabile senza listener realtime multipli.';
+    if(code.includes('INTERNAL ASSERTION FAILED'))msg='Errore interno Firestore rilevato. La V7.11 usa una modalità Forum più stabile senza listener realtime multipli.';
     else if(code.includes('operation-not-allowed'))msg='Forum non ancora abilitato: attiva Authentication → Anonimo in Firebase.';
     else if(code.includes('permission-denied'))msg='Firestore sta bloccando il Forum: pubblica le regole V7.9 incluse nello ZIP.';
     else if(code.includes('auth/not-ready')||code.includes('community/not-ready'))msg='Il servizio Forum non è ancora pronto. Ricarica la pagina e riprova.';
@@ -813,20 +903,143 @@ async function createThread(k){
     if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='Pubblica / Invia'}
   }
 }
-function openThread(id){forumRoute='thread:'+id;renderForum();scrollTo(0,0)}
-function renderThreadDetail(id){const t=[...state.forumPublic,...state.forumPrivate].find(x=>x.id===id);if(!t){document.getElementById('forumContent').innerHTML='<div class="empty">Discussione non disponibile o non autorizzata.</div>';return}const c=FORUM_CATEGORIES[t.category],replies=state.communityReplies[id]||[],mine=window.communityUid&&t.authorUid===window.communityUid;document.getElementById('forumContent').innerHTML=`<div class="breadcrumbs"><button onclick="forumRoute='';renderForum()">Forum</button><span>›</span><button onclick="forumRoute='${t.category}';renderForum()">${c.title}</button><span>›</span><strong>Discussione</strong></div><div class="card"><div class="top"><div class="authorline"><img class="mc-avatar" src="${mcHead(t.minecraft)}"><div><div class="role">${c.icon} ${c.title}</div><h2 style="margin:6px 0">${esc(t.title)}</h2><div class="muted">${esc(t.authorName)} · ${esc(t.minecraft)} · ${fmtDate(t.createdAt)}</div></div></div>${isStaff()?`<div class="toolbar"><button class="btn small" onclick="openThreadAdmin('${id}')">Gestisci</button><button class="btn small danger" onclick="deleteThread('${id}')">Elimina</button></div>`:''}</div><p style="white-space:pre-wrap;line-height:1.7">${esc(t.body)}</p>${threadExtra(t)}<div class="toolbar"><span class="status-chip">${esc(t.status)}</span>${t.assignedTo?`<span class="tag">👨‍💻 Assegnata a: ${esc(t.assignedTo)}</span>`:''}${t.locked?'<span class="tag">🔒 Discussione chiusa</span>':''}${t.category==='proposals'?`<button class="btn small ${(t.votes||[]).includes(window.communityUid)?'vote-btn on':''}" onclick="voteThread('${id}')">👍 ${(t.votes||[]).length} voti</button>`:''}</div></div><div class="card" style="margin-top:14px"><div class="top"><div><div class="eyebrow">Conversazione</div><h3>${replies.length} risposte</h3></div></div><div>${replies.length?replies.map(r=>replyHTML(t,r)).join(''):'<div class="empty">Nessuna risposta.</div>'}</div>${!t.locked||isStaff()?`<div class="field" style="margin-top:16px"><label>Rispondi</label><textarea id="replyText" class="input" placeholder="Scrivi una risposta..."></textarea></div><button class="btn primary" onclick="sendReply('${id}')">Invia risposta</button>`:'<div class="notice" style="margin-top:14px">La discussione è stata chiusa dallo staff.</div>'}</div>`}
+async function openThread(id){
+  forumRoute='thread:'+id;
+  renderForum();
+  scrollTo(0,0);
+  try{await window.communityBridge?.refreshReplies?.(id)}catch(e){console.error(e)}
+  if(forumRoute==='thread:'+id)renderForum();
+  setTimeout(()=>{const b=document.getElementById('forumChatMessages');if(b)b.scrollTop=b.scrollHeight},50);
+}
+function forumChatTime(v){
+  try{return new Date(v).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}catch(e){return ''}
+}
+function forumChatDate(v){
+  try{return new Date(v).toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'})}catch(e){return ''}
+}
+function forumBubble(t,r){
+  const mine=!!(window.communityUid&&r.authorUid===window.communityUid);
+  const can=isStaff()||mine;
+  return `<div class="chat-bubble-row ${mine?'mine':'other'}">
+    <img class="chat-bubble-avatar" src="${mcHead(r.minecraft)}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'">
+    <div class="chat-bubble">
+      <div class="chat-bubble-author">${esc(r.authorName||'Utente')}${r.staff?' · STAFF':''}</div>
+      <div class="chat-bubble-text">${esc(r.body||'')}</div>
+      <div class="chat-bubble-meta"><span>${forumChatTime(r.createdAt)}</span>${mine?'<span>✓✓</span>':''}</div>
+      ${can?`<div class="chat-bubble-actions"><button onclick="editReply('${t.id}','${r.id}')">Modifica</button><button onclick="deleteReply('${t.id}','${r.id}')">Elimina</button></div>`:''}
+    </div>
+  </div>`;
+}
+function renderThreadDetail(id){
+  const t=[...state.forumPublic,...state.forumPrivate].find(x=>x.id===id);
+  if(!t){
+    document.getElementById('forumContent').innerHTML=`<div class="empty">Discussione non disponibile. <button class="btn small" onclick="window.communityBridge?.refreshCommunityData?.(${isStaff()});setTimeout(()=>renderForum(),500)">Ricarica Forum</button></div>`;
+    return;
+  }
+  const c=FORUM_CATEGORIES[t.category],replies=state.communityReplies[id]||[];
+  const mine=window.communityUid&&t.authorUid===window.communityUid;
+  const box=document.getElementById('forumContent');
+  box.innerHTML=`
+    <div class="breadcrumbs">
+      <button onclick="forumRoute='';renderForum()">Forum</button><span>›</span>
+      <button onclick="forumRoute='${t.category}';renderForum()">${c.title}</button><span>›</span>
+      <strong>${esc(t.title)}</strong>
+    </div>
+    <div class="forum-chat-shell">
+      <div class="forum-chat-header">
+        <button class="iconbtn" onclick="forumBack()" title="Indietro">←</button>
+        <img class="mc-avatar" src="${mcHead(t.minecraft)}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'">
+        <div class="forum-chat-header-main">
+          <h3>${esc(t.title)}</h3>
+          <small>${c.icon} ${esc(c.title)} · ${esc(t.authorName||'Utente')} · ${t.locked?'chat chiusa':'online'}</small>
+        </div>
+        <div class="forum-chat-header-actions">
+          <button class="btn small forum-refresh-btn" onclick="refreshOpenThread('${id}')">↻ <span>Aggiorna</span></button>
+          ${isStaff()?`<button class="btn small" onclick="openThreadAdmin('${id}')">⚙ <span>Gestisci</span></button>`:''}
+        </div>
+      </div>
+      ${threadExtra(t)?`<div class="forum-chat-info">${threadExtra(t)}</div>`:''}
+      <div class="forum-chat-messages" id="forumChatMessages">
+        <div class="forum-chat-day">${forumChatDate(t.createdAt)}</div>
+        <div class="chat-original">
+          <div class="chat-bubble-author">${esc(t.authorName||'Utente')} · messaggio iniziale</div>
+          <div class="chat-bubble-text">${esc(t.body||'')}</div>
+          <div class="chat-bubble-meta"><span>${forumChatTime(t.createdAt)}</span></div>
+        </div>
+        ${replies.map(r=>forumBubble(t,r)).join('')}
+        ${!replies.length?'<div class="muted" style="text-align:center;font-size:.72rem;margin:10px 0">Nessuna risposta ancora. Scrivi il primo messaggio.</div>':''}
+      </div>
+      ${!t.locked||isStaff()?`
+        <div class="forum-chat-composer">
+          <textarea id="replyText" class="input" rows="1" placeholder="Scrivi un messaggio..." onkeydown="forumComposerKey(event,'${id}')"></textarea>
+          <button class="forum-send-btn" onclick="sendReply('${id}')" title="Invia">➤</button>
+        </div>`
+        : `<div class="notice" style="margin:12px">🔒 La discussione è stata chiusa dallo staff.</div>`}
+    </div>`;
+  setTimeout(()=>{const m=document.getElementById('forumChatMessages');if(m)m.scrollTop=m.scrollHeight},20);
+}
+async function refreshOpenThread(id){
+  try{
+    await window.communityBridge?.refreshCommunityData?.(isStaff());
+    await window.communityBridge?.refreshReplies?.(id);
+    if(forumRoute==='thread:'+id)renderForum();
+    toast('Conversazione aggiornata');
+  }catch(e){console.error(e);toast('Impossibile aggiornare la conversazione')}
+}
+function forumComposerKey(e,id){
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    sendReply(id);
+  }
+}
 function threadExtra(t){let a=[];if(t.area)a.push(`<strong>Area:</strong> ${esc(t.area)}`);if(t.repro)a.push(`<strong>Riproduzione:</strong> ${esc(t.repro)}`);if(t.target)a.push(`<strong>Giocatore segnalato:</strong> ${esc(t.target)}`);if(t.reason)a.push(`<strong>Motivazione:</strong> ${esc(t.reason)}`);if(t.when)a.push(`<strong>Data/ora:</strong> ${esc(t.when)}`);if(t.witness)a.push(`<strong>Testimoni:</strong> ${esc(t.witness)}`);if(t.topic)a.push(`<strong>Area salotto:</strong> ${esc(t.topic)}`);if(t.evidence)a.push(`<strong>Prove:</strong> <a href="${esc(t.evidence)}" target="_blank" rel="noopener" style="color:var(--cyan)">Apri allegato ↗</a>`);return a.length?`<div class="notice" style="margin:12px 0">${a.join('<br>')}</div>`:''}
 function replyHTML(t,r){const can=isStaff()||(window.communityUid&&r.authorUid===window.communityUid);return `<div class="reply"><img class="mc-avatar" src="${mcHead(r.minecraft)}"><div class="reply-body"><div class="thread-meta"><strong>${esc(r.authorName)}</strong>${r.staff?'<span class="tag">STAFF</span>':''}<span>· ${fmtDate(r.createdAt)}</span></div><div style="white-space:pre-wrap;margin-top:5px;line-height:1.55">${esc(r.body)}</div>${can?`<div class="reply-actions"><button class="btn small" onclick="editReply('${t.id}','${r.id}')">Modifica</button><button class="btn small danger" onclick="deleteReply('${t.id}','${r.id}')">Elimina</button></div>`:''}</div></div>`}
-async function sendReply(id){ensureCommunityProfile(async()=>{const body=document.getElementById('replyText')?.value.trim();if(!body)return toast('Scrivi una risposta');try{await window.communityBridge.addReply(id,{body,authorName:isStaff()?user.name:communityProfile.name,minecraft:isStaff()?user.name:communityProfile.minecraft,staff:isStaff()});document.getElementById('replyText').value='';}catch(e){console.error(e);toast('Errore invio risposta')}})}
+async function sendReply(id){
+  ensureCommunityProfile(async()=>{
+    const input=document.getElementById('replyText');
+    const body=input?.value.trim();
+    if(!body)return toast('Scrivi un messaggio');
+    if(input){input.value='';input.disabled=true}
+    try{
+      await window.communityBridge.addReply(id,{
+        body,
+        authorName:isStaff()?user.name:communityProfile.name,
+        minecraft:isStaff()?user.name:communityProfile.minecraft,
+        staff:isStaff()
+      });
+      scSound?.('success');
+      if(forumRoute==='thread:'+id)renderForum();
+      setTimeout(()=>{const m=document.getElementById('forumChatMessages');if(m)m.scrollTop=m.scrollHeight},30);
+    }catch(e){
+      console.error(e);
+      toast('Errore invio messaggio');
+      if(input)input.value=body;
+    }finally{
+      const current=document.getElementById('replyText');if(current)current.disabled=false;
+    }
+  });
+}
 function openThreadAdmin(id){const t=[...state.forumPublic,...state.forumPrivate].find(x=>x.id===id),c=FORUM_CATEGORIES[t.category];openGeneric('Gestione discussione',`<div class="field"><label>Stato</label><select id="taStatus" class="input">${c.statuses.map(x=>`<option ${x===t.status?'selected':''}>${x}</option>`).join('')}</select></div>${t.category==='bugs'?`<div class="field"><label>Assegnata a</label><input id="taAssign" class="input" value="${esc(t.assignedTo||'')}" placeholder="DeveloperName"></div>`:''}<div class="top"><span>Discussione bloccata</span><button class="switch ${t.locked?'on':''}" onclick="this.classList.toggle('on');this.dataset.on=this.classList.contains('on')"></button></div><button class="btn primary" style="margin-top:16px" onclick="saveThreadAdmin('${id}')">Salva modifiche</button>`);setTimeout(()=>{const sw=document.querySelector('#genericBody .switch');if(sw)sw.dataset.on=String(!!t.locked)},0)}
 async function saveThreadAdmin(id){const sw=document.querySelector('#genericBody .switch'),patch={status:document.getElementById('taStatus').value,locked:sw?.dataset.on==='true'};const a=document.getElementById('taAssign');if(a)patch.assignedTo=a.value.trim();await window.communityBridge.updateThread(id,patch);closeModal('genericModal')}
 async function deleteThread(id){if(!confirm('Eliminare definitivamente questa discussione?'))return;await window.communityBridge.deleteThread(id);forumBack();toast('Discussione eliminata')}
 async function voteThread(id){ensureCommunityProfile(async()=>{await window.communityBridge.toggleVote(id)})}
 function editReply(tid,rid){const r=(state.communityReplies[tid]||[]).find(x=>x.id===rid);if(!r)return;openGeneric('Modifica messaggio',`<div class="field"><label>Messaggio</label><textarea id="editReplyBody" class="input">${esc(r.body)}</textarea></div><button class="btn primary" onclick="saveEditedReply('${tid}','${rid}')">Salva</button>`)}
-async function saveEditedReply(tid,rid){const body=document.getElementById('editReplyBody').value.trim();if(!body)return;await window.communityBridge.updateReply(tid,rid,{body});closeModal('genericModal')}
-async function deleteReply(tid,rid){if(!confirm('Eliminare questo messaggio?'))return;await window.communityBridge.deleteReply(tid,rid)}
-function applyForumPublic(items){state.forumPublic=items||[];localStorage.setItem(KEY,JSON.stringify(state));if(!document.getElementById('forumView').classList.contains('hidden'))renderForum()}
-function applyForumPrivate(items){state.forumPrivate=items||[];localStorage.setItem(KEY,JSON.stringify(state));if(!document.getElementById('forumView').classList.contains('hidden'))renderForum()}
+async function saveEditedReply(tid,rid){const body=document.getElementById('editReplyBody').value.trim();if(!body)return;await window.communityBridge.updateReply(tid,rid,{body});closeModal('genericModal');if(forumRoute==='thread:'+tid)renderForum()}
+async function deleteReply(tid,rid){if(!confirm('Eliminare questo messaggio?'))return;await window.communityBridge.deleteReply(tid,rid);if(forumRoute==='thread:'+tid)renderForum()}
+function applyForumPublic(items){
+  const unique=[];const seen=new Set();
+  (items||[]).forEach(x=>{if(x?.id&&!seen.has(x.id)){seen.add(x.id);unique.push(x)}});
+  state.forumPublic=unique;window.__scForumPublicCache=unique;
+  localStorage.setItem(KEY,JSON.stringify(state));
+  if(!document.getElementById('forumView').classList.contains('hidden'))renderForum();
+}
+function applyForumPrivate(items){
+  const unique=[];const seen=new Set();
+  (items||[]).forEach(x=>{if(x?.id&&!seen.has(x.id)){seen.add(x.id);unique.push(x)}});
+  state.forumPrivate=unique;window.__scForumPrivateCache=unique;
+  localStorage.setItem(KEY,JSON.stringify(state));
+  if(!document.getElementById('forumView').classList.contains('hidden'))renderForum();
+}
 function applyReplies(threadId,items){state.communityReplies[threadId]=items||[];localStorage.setItem(KEY,JSON.stringify(state));if(forumRoute==='thread:'+threadId)renderForum()}
 window.applyForumPublic=applyForumPublic;window.applyForumPrivate=applyForumPrivate;window.applyReplies=applyReplies;
 function renderSpoilers(){const box=document.getElementById('spoilersGrid');if(!box)return;document.getElementById('spoilerAddBtn')?.classList.toggle('hidden',!isStaff());document.getElementById('spoilerCount').textContent=`${state.spoilers.length} spoiler`;box.innerHTML=state.spoilers.length?state.spoilers.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).map(x=>`<article class="card spoiler-card"><div class="spoiler-cover" onclick="openSpoiler('${x.id}')"><img src="${esc(x.image||'')}" alt="${esc(x.title)}" onerror="this.style.display='none'"></div><div class="spoiler-content"><div class="role">${x.chatOpen?'💬 Chat aperta':'🔒 Chat chiusa'}</div><h3>${esc(x.title)}</h3><p class="muted">${esc(x.description||'')}</p><div class="toolbar"><button class="btn small primary" onclick="openSpoiler('${x.id}')">Apri spoiler</button>${isStaff()?`<button class="btn small" onclick="openSpoilerEditor('${x.id}')">Modifica</button><button class="btn small danger" onclick="deleteSpoiler('${x.id}')">Elimina</button>`:''}</div></div></article>`).join(''):'<div class="empty">Nessuno spoiler pubblicato.</div>'}
@@ -1022,8 +1235,9 @@ async function refreshSpoilers(){
 }
 async function refreshPublicThreads(){
   try{
-    const snap=await getDocs(query(collection(db,'communityThreads'),where('visibility','==','public'),orderBy('createdAt','desc')));
-    const items=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const snap=await getDocs(query(collection(db,'communityThreads'),where('visibility','==','public')));
+    const items=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
     window.applyForumPublic?.(items);
   }catch(e){console.error('Forum public refresh',e)}
 }
@@ -1031,10 +1245,13 @@ async function refreshPrivateThreads(staffMode){
   if(!auth.currentUser){window.applyForumPrivate?.([]);return}
   try{
     const q=staffMode
-      ? query(collection(db,'communityThreads'),where('visibility','==','private'),orderBy('createdAt','desc'))
-      : query(collection(db,'communityThreads'),where('visibility','==','private'),where('authorUid','==',auth.currentUser.uid),orderBy('createdAt','desc'));
+      ? query(collection(db,'communityThreads'),where('visibility','==','private'))
+      : query(collection(db,'communityThreads'),where('authorUid','==',auth.currentUser.uid));
     const snap=await getDocs(q);
-    window.applyForumPrivate?.(snap.docs.map(d=>({id:d.id,...d.data()})));
+    const items=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(x=>x.visibility==='private')
+      .sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+    window.applyForumPrivate?.(items);
   }catch(e){console.error('Forum private refresh',e)}
 }
 async function refreshReplies(threadId){
@@ -1087,9 +1304,17 @@ async function createThread(data){
     updatedAt:new Date().toISOString()
   };
   const ref=await addDoc(collection(db,'communityThreads'),payload);
-  await refreshCommunityData(!!currentProfile);
+  const full={id:ref.id,...payload};
+  // Inserimento immediato locale: la discussione non può "sparire" mentre Firestore ricarica.
+  if(full.visibility==='public'){
+    window.applyForumPublic?.([full,...((window.__scForumPublicCache)||[])]);
+  }else{
+    window.applyForumPrivate?.([full,...((window.__scForumPrivateCache)||[])]);
+  }
   await refreshReplies(ref.id);
-  return ref.id;
+  // Refresh asincrono successivo, senza bloccare l'apertura della chat.
+  setTimeout(()=>refreshCommunityData(!!currentProfile),250);
+  return full;
 }
 async function updateThread(id,patch){await updateDoc(doc(db,'communityThreads',id),{...patch,updatedAt:new Date().toISOString()});await refreshCommunityData(!!currentProfile)}
 async function deleteThread(id){await deleteDoc(doc(db,'communityThreads',id));await refreshCommunityData(!!currentProfile)}
