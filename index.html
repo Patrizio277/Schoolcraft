@@ -280,6 +280,25 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
 }
 </style>
 
+
+<style id="schoolcraft-v714-fixes">
+.change-more-btn{border:1px solid rgba(77,214,255,.22);background:rgba(77,214,255,.06);color:#dff8ff;border-radius:9px;padding:8px 11px;font-size:.7rem;font-weight:800;white-space:nowrap}
+.change-more-btn:hover{background:rgba(77,214,255,.11);border-color:rgba(77,214,255,.38)}
+.change-viewer .modal-card{width:min(720px,100%);padding:0;overflow:hidden;background:#081522}
+.change-viewer-cover{width:100%;height:260px;background:radial-gradient(circle at 20% 10%,rgba(77,214,255,.15),transparent 32%),linear-gradient(145deg,#0c2134,#07121e);display:grid;place-items:center;overflow:hidden}
+.change-viewer-cover img{width:100%;height:100%;object-fit:cover}
+.change-viewer-placeholder{color:#6f879a;font-size:.8rem}
+.change-viewer-body{padding:22px 24px 26px}
+.change-viewer-body .modal-head{margin-bottom:10px}
+.change-viewer-body h2{font-size:1.55rem;line-height:1.15}
+.change-viewer-text{white-space:pre-wrap;line-height:1.75;color:#c9d7e1;margin-top:16px}
+.change-viewer-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.thread-admin-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}
+.thread-lock-row{margin-top:14px;padding:13px;border:1px solid var(--line);border-radius:12px;background:#07131f}
+.thread-lock-state{font-size:.7rem;color:var(--muted);margin-top:5px}
+@media(max-width:760px){.change-viewer-cover{height:210px}.change-viewer-body{padding:18px}.thread-admin-actions{grid-template-columns:1fr}}
+</style>
+
 </head>
 <body>
 
@@ -614,31 +633,41 @@ function renderChanges(){
   box.classList.remove('card');
   box.innerHTML=a.length
     ? `<div class="public-change-list">${a.map(c=>`
-      <article class="public-change-item" id="publicChange-${c.id}">
-        <button class="public-change-summary" onclick="togglePublicChange('${c.id}')">
+      <article class="public-change-item">
+        <div class="public-change-summary">
           <div>
             <div class="change-date">${fmtLocalDate(c.date)}</div>
             <h3>${esc(c.title)}</h3>
           </div>
-          <span class="public-change-arrow">⌄</span>
-        </button>
-        <div class="public-change-details">
-          <p>${esc(c.text||'')}</p>
-          ${c.image?`<img class="public-change-image" loading="lazy" src="${esc(c.image)}" onerror="this.style.display='none'" alt="${esc(c.title)}">`:''}
-          <div class="public-change-meta">
-            <span class="tag">Pubblicato il ${fmtLocalDate(c.date)}</span>
-            <span class="tag">Direzione Schoolcraft</span>
-          </div>
+          <button class="change-more-btn" onclick="openPublicChangeModal('${c.id}')">Mostra altro</button>
         </div>
       </article>`).join('')}</div>`
     : `<div class="empty">Nessuna modifica pubblicata.</div>`;
 }
-function togglePublicChange(id){
-  const el=document.getElementById('publicChange-'+id);
-  if(!el)return;
-  const wasOpen=el.classList.contains('open');
-  document.querySelectorAll('.public-change-item.open').forEach(x=>x.classList.remove('open'));
-  if(!wasOpen){el.classList.add('open');scSound?.('open')}
+function openPublicChangeModal(id){
+  const c=(state.changes||[]).find(x=>x.id===id);if(!c)return;
+  const modal=document.getElementById('publicChangeModal');
+  const box=document.getElementById('publicChangeModalContent');
+  box.innerHTML=`
+    <div class="change-viewer-cover">
+      ${c.image?`<img src="${esc(c.image)}" alt="${esc(c.title)}" onerror="this.outerHTML='<div class=change-viewer-placeholder>Immagine non disponibile</div>'">`:`<div class="change-viewer-placeholder">Schoolcraft · Comunicazione ufficiale</div>`}
+    </div>
+    <div class="change-viewer-body">
+      <div class="modal-head">
+        <div><div class="eyebrow">Comunicazione ufficiale</div><h2>${esc(c.title)}</h2></div>
+        <button class="iconbtn" onclick="closePublicChangeModal()">×</button>
+      </div>
+      <div class="muted">${fmtLocalDate(c.date)}</div>
+      <div class="change-viewer-text">${esc(c.text||'')}</div>
+      <div class="change-viewer-meta"><span class="tag">Direzione Schoolcraft</span><span class="tag">Pubblicato il ${fmtLocalDate(c.date)}</span></div>
+    </div>`;
+  modal.classList.remove('hidden');
+  document.body.style.overflow='hidden';
+  scSound?.('open');
+}
+function closePublicChangeModal(){
+  document.getElementById('publicChangeModal')?.classList.add('hidden');
+  document.body.style.overflow='';
 }
 
 function calendarHTML(base,mode){const y=base.getFullYear(),m=base.getMonth(),first=new Date(y,m,1),mondayOffset=(first.getDay()+6)%7,start=new Date(y,m,1-mondayOffset),days=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];let h=days.map(d=>`<div class="weekday">${d}</div>`).join('');for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const iso=localISO(d),ev=state.events.filter(e=>eventDate(e)===iso),other=d.getMonth()!==m;let click='';if(mode==='public')click=`onclick="openPublicDay('${iso}')"`;if(mode==='dash')click=`onclick="openEventModal('', '${iso}')"`;h+=`<div class="day clickable ${other?'other':''} ${iso===localISO()?'today':''}" ${click}><div class="daynum">${d.getDate()}</div>${ev.slice(0,2).map(e=>`<button class="event-pill" onclick="event.stopPropagation();${mode==='dash'?`editEvent('${e.id}')`:`showEventPublic('${e.id}')`}">${esc(e.title)}</button>`).join('')}${ev.length>2?`<div class="muted" style="font-size:.58rem;margin-top:3px">+${ev.length-2}</div>`:''}</div>`}return h}
@@ -1219,7 +1248,7 @@ function renderThreadDetail(id){
         </div>
         <div class="forum-chat-header-actions">
           <button class="btn small forum-refresh-btn" onclick="refreshOpenThread('${id}')">↻ <span>Aggiorna</span></button>
-          ${isStaff()?`<button class="btn small" onclick="openThreadAdmin('${id}')">⚙ <span>Gestisci</span></button>`:''}
+          ${isStaff()?`<button class="btn small" onclick="openThreadAdmin('${id}')">⚙ <span>Gestisci</span></button><button class="btn small danger" onclick="deleteThreadFromAdmin('${id}')">⌫ <span>Elimina</span></button>`:''}
         </div>
       </div>
       ${threadExtra(t)?`<div class="forum-chat-info">${threadExtra(t)}</div>`:''}
@@ -1283,8 +1312,63 @@ async function sendReply(id){
     }
   });
 }
-function openThreadAdmin(id){const t=[...state.forumPublic,...state.forumPrivate].find(x=>x.id===id),c=FORUM_CATEGORIES[t.category];openGeneric('Gestione discussione',`<div class="field"><label>Stato</label><select id="taStatus" class="input">${c.statuses.map(x=>`<option ${x===t.status?'selected':''}>${x}</option>`).join('')}</select></div>${t.category==='bugs'?`<div class="field"><label>Assegnata a</label><input id="taAssign" class="input" value="${esc(t.assignedTo||'')}" placeholder="DeveloperName"></div>`:''}<div class="top"><span>Discussione bloccata</span><button class="switch ${t.locked?'on':''}" onclick="this.classList.toggle('on');this.dataset.on=this.classList.contains('on')"></button></div><button class="btn primary" style="margin-top:16px" onclick="saveThreadAdmin('${id}')">Salva modifiche</button>`);setTimeout(()=>{const sw=document.querySelector('#genericBody .switch');if(sw)sw.dataset.on=String(!!t.locked)},0)}
-async function saveThreadAdmin(id){const sw=document.querySelector('#genericBody .switch'),patch={status:document.getElementById('taStatus').value,locked:sw?.dataset.on==='true'};const a=document.getElementById('taAssign');if(a)patch.assignedTo=a.value.trim();await window.communityBridge.updateThread(id,patch);closeModal('genericModal')}
+function openThreadAdmin(id){
+  const t=[...(state.forumPublic||[]),...(state.forumPrivate||[])].find(x=>x.id===id);
+  if(!t||!isStaff())return;
+  const c=FORUM_CATEGORIES[t.category];
+  openGeneric('Gestione discussione',`
+    <div class="field"><label>Stato</label><select id="taStatus" class="input">${c.statuses.map(x=>`<option value="${esc(x)}" ${x===t.status?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
+    ${t.category==='bugs'?`<div class="field"><label>Assegnata a</label><input id="taAssign" class="input" value="${esc(t.assignedTo||'')}" placeholder="DeveloperName"></div>`:''}
+    <div class="thread-lock-row">
+      <div class="top">
+        <div><strong>Blocca discussione</strong><div class="thread-lock-state" id="threadLockLabel">${t.locked?'La chat è bloccata':'La chat è aperta'}</div></div>
+        <button id="taLockSwitch" class="switch ${t.locked?'on':''}" data-locked="${t.locked?'true':'false'}" onclick="toggleThreadAdminLock()"></button>
+      </div>
+    </div>
+    <div class="thread-admin-actions">
+      <button class="btn primary" onclick="saveThreadAdmin('${id}')">Salva modifiche</button>
+      <button class="btn danger" onclick="deleteThreadFromAdmin('${id}')">Elimina discussione</button>
+    </div>
+  `);
+}
+function toggleThreadAdminLock(){
+  const sw=document.getElementById('taLockSwitch');if(!sw)return;
+  const next=sw.dataset.locked!=='true';
+  sw.dataset.locked=String(next);
+  sw.classList.toggle('on',next);
+  const label=document.getElementById('threadLockLabel');
+  if(label)label.textContent=next?'La chat è bloccata':'La chat è aperta';
+}
+async function saveThreadAdmin(id){
+  const sw=document.getElementById('taLockSwitch');
+  const patch={status:document.getElementById('taStatus').value,locked:sw?.dataset.locked==='true'};
+  const a=document.getElementById('taAssign');if(a)patch.assignedTo=a.value.trim();
+  try{
+    let local=[...(state.forumPublic||[]),...(state.forumPrivate||[])].find(x=>x.id===id);
+    if(local)Object.assign(local,patch,{updatedAt:new Date().toISOString()});
+    forumSaveLocalCache();
+    localStorage.setItem(KEY,JSON.stringify(state));
+    await window.communityBridge.updateThread(id,patch);
+    local=[...(state.forumPublic||[]),...(state.forumPrivate||[])].find(x=>x.id===id);
+    if(local)Object.assign(local,patch);
+    forumSaveLocalCache();
+    localStorage.setItem(KEY,JSON.stringify(state));
+    closeModal('genericModal');
+    if(forumRoute==='thread:'+id)renderForum();
+    toast(patch.locked?'Discussione bloccata':'Discussione aggiornata');
+  }catch(e){console.error(e);toast('Errore durante il salvataggio della discussione')}
+}
+async function deleteThreadFromAdmin(id){
+  if(!isStaff())return;
+  if(!confirm('Vuoi eliminare definitivamente questa discussione e rimuoverla dal Forum?'))return;
+  try{
+    await window.communityBridge.deleteThread(id);
+    closeModal('genericModal');
+    forumRoute='';
+    renderForum();
+    toast('Discussione eliminata');
+  }catch(e){console.error(e);toast('Errore durante eliminazione della discussione')}
+}
 async function deleteThread(id){if(!confirm('Eliminare definitivamente questa discussione?'))return;await window.communityBridge.deleteThread(id);forumBack();toast('Discussione eliminata')}
 async function voteThread(id){ensureCommunityProfile(async()=>{await window.communityBridge.toggleVote(id)})}
 function editReply(tid,rid){const r=(state.communityReplies[tid]||[]).find(x=>x.id===rid);if(!r)return;openGeneric('Modifica messaggio',`<div class="field"><label>Messaggio</label><textarea id="editReplyBody" class="input">${esc(r.body)}</textarea></div><button class="btn primary" onclick="saveEditedReply('${tid}','${rid}')">Salva</button>`)}
@@ -1590,7 +1674,15 @@ async function createThread(data){
   setTimeout(()=>refreshCommunityData(!!currentProfile),350);
   return full;
 }
-async function updateThread(id,patch){await updateDoc(doc(db,'communityThreads',id),{...patch,updatedAt:new Date().toISOString()});await refreshCommunityData(!!currentProfile)}
+async function updateThread(id,patch){
+  const updatedAt=new Date().toISOString();
+  await updateDoc(doc(db,'communityThreads',id),{...patch,updatedAt});
+  const local=[...(state.forumPublic||[]),...(state.forumPrivate||[])].find(x=>x.id===id);
+  if(local)Object.assign(local,patch,{updatedAt});
+  forumSaveLocalCache();
+  localStorage.setItem(KEY,JSON.stringify(state));
+  setTimeout(()=>refreshCommunityData(!!currentProfile),250);
+}
 async function deleteThread(id){await deleteDoc(doc(db,'communityThreads',id));forumRemoveLocalThread(id);await refreshCommunityData(!!currentProfile)}
 async function toggleVote(id){await ensureAnonymous();const ref=doc(db,'communityThreads',id),snap=await getDoc(ref);if(!snap.exists())return;const votes=snap.data().votes||[],me=auth.currentUser.uid;await updateDoc(ref,{votes:votes.includes(me)?arrayRemove(me):arrayUnion(me),updatedAt:new Date().toISOString()});await refreshPublicThreads()}
 async function addReply(tid,data){
@@ -1631,6 +1723,11 @@ async function deleteSpoilerComment(sid,rid){await deleteDoc(doc(db,'spoilers',s
 window.communityBridge={createThread,updateThread,deleteThread,toggleVote,addReply,updateReply,deleteReply,saveSpoiler,updateSpoiler,deleteSpoiler,watchSpoilerComments,addSpoilerComment,updateSpoilerComment,deleteSpoilerComment,refreshCommunityData,refreshReplies};
 init();
 </script>
+
+
+<div id="publicChangeModal" class="modal change-viewer hidden" onclick="if(event.target===this)closePublicChangeModal()">
+  <div class="modal-card"><div id="publicChangeModalContent"></div></div>
+</div>
 
 </body>
 </html>
