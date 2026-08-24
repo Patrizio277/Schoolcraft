@@ -516,13 +516,43 @@ function migrate(s){
   return out;
 }
 function loadState(){try{const s=JSON.parse(localStorage.getItem(KEY));return s?migrate(s):clone(DEFAULT)}catch(e){return clone(DEFAULT)}}
+
+// Registro persistente delle comunicazioni eliminate.
+// Serve per evitare che una copia vecchia proveniente da Firestore/localStorage
+// faccia ricomparire o sparire comunicazioni dopo un refresh.
+state.deletedChangeIds=Array.isArray(state.deletedChangeIds)?state.deletedChangeIds:[];
+
+function mergeChangesPersistent(remoteChanges=[]){
+  const deleted=new Set(state.deletedChangeIds||[]);
+  const map=new Map();
+
+  // Prima i dati locali: così non spariscono se il cloud è momentaneamente vecchio/vuoto.
+  (state.changes||[]).forEach(c=>{
+    if(c?.id&&!deleted.has(c.id))map.set(c.id,c);
+  });
+
+  // Poi il cloud: se ha una versione più aggiornata dello stesso ID, prevale.
+  (remoteChanges||[]).forEach(c=>{
+    if(c?.id&&!deleted.has(c.id)){
+      const old=map.get(c.id)||{};
+      map.set(c.id,{...old,...c});
+    }
+  });
+
+  return [...map.values()].sort((a,b)=>{
+    const da=String(a.date||'');
+    const db=String(b.date||'');
+    if(db!==da)return db.localeCompare(da);
+    return String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));
+  });
+}
 function saveData(msg='Salvato correttamente'){
   localStorage.setItem(KEY,JSON.stringify(state));
   renderAll();beep();toast(msg);
   queueCloudSave();
 }
 function queueCloudSave(){
-  if(!user || !window.firebaseBridge || !cloudReady)return;
+  if(!isStaff() || !window.firebaseBridge || !cloudReady)return;
   clearTimeout(cloudSaveTimer);
   cloudSaveTimer=setTimeout(async()=>{
     try{
@@ -537,10 +567,27 @@ function queueCloudSave(){
 }
 function applyPublicCloud(data){
   if(!data)return;
-  ['members','events','changes','gallery','rules','rulesUpdated'].forEach(k=>{
+
+  // Sincronizza prima gli ID eliminati.
+  const localDeleted=Array.isArray(state.deletedChangeIds)?state.deletedChangeIds:[];
+  const cloudDeleted=Array.isArray(data.deletedChangeIds)?data.deletedChangeIds:[];
+  state.deletedChangeIds=[...new Set([...localDeleted,...cloudDeleted])];
+
+  // Le comunicazioni vengono unite, NON sostituite.
+  // Così un listener Firestore momentaneamente vuoto/vecchio non può cancellarle.
+  if(Array.isArray(data.changes)){
+    state.changes=mergeChangesPersistent(data.changes);
+  }else{
+    state.changes=mergeChangesPersistent([]);
+  }
+
+  ['members','events','gallery','rules','rulesUpdated'].forEach(k=>{
     if(data[k]!==undefined)state[k]=data[k];
   });
+
   state=migrate(state);
+  state.deletedChangeIds=Array.isArray(state.deletedChangeIds)?state.deletedChangeIds:[];
+  state.changes=mergeChangesPersistent(state.changes||[]);
   localStorage.setItem(KEY,JSON.stringify(state));
   renderAll();
 }
@@ -637,6 +684,8 @@ async function login(){
     err.textContent='Servizio di accesso non ancora disponibile. Ricarica la pagina.';
     return;
   }
+  const loginBtn=document.querySelector('#loginModal .btn.primary');
+  if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Accesso in corso...'}
   try{
     const profile=await window.firebaseBridge.login(entry[1].email,p);
     if(!profile || !profile.active || !['owner','admin'].includes(profile.permission)){
@@ -651,8 +700,17 @@ async function login(){
     renderAll();
     toast('Accesso sicuro effettuato');
   }catch(e){
-    console.error(e);
-    err.textContent='Nome o password non corretti oppure account Firebase non configurato.';
+    console.error('Staff login error:',e);
+    const code=String(e?.code||e?.message||'');
+    if(code.includes('invalid-credential')||code.includes('wrong-password')||code.includes('user-not-found')){
+      err.textContent='Nome o password non corretti.';
+    }else if(code.includes('network')){
+      err.textContent='Problema di connessione a Firebase. Riprova tra qualche secondo.';
+    }else{
+      err.textContent='Accesso non riuscito. Riprova dopo aver ricaricato la pagina.';
+    }
+  }finally{
+    if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Entra nel pannello'}
   }
 }
 async function logout(){
@@ -665,7 +723,13 @@ function renderAccounts(){['publicAccount','participantsAccount','teamAccount','
 
 function eventDate(e){return String(e.date||'').slice(0,10)}
 function futureEvents(){const now=new Date();return state.events.filter(e=>new Date(e.date)>now).sort((a,b)=>new Date(a.date)-new Date(b.date))}
-function renderHeroStatus(){const next=futureEvents()[0],changes=state.changes||[];document.getElementById('heroNextLabel').textContent=next?next.title:'Nessuno';document.getElementById('heroChangeCount').textContent=changes.length;document.getElementById('heroUpdated').textContent=changes[0]?fmtLocalDate(changes[0].date):'Nessuna modifica'}
+function renderHeroStatus(){
+  const next=futureEvents()[0];
+  const changes=(state.changes||[]).filter(c=>c.published!==false);
+  document.getElementById('heroNextLabel').textContent=next?next.title:'Nessuno';
+  document.getElementById('heroChangeCount').textContent=changes.length;
+  document.getElementById('heroUpdated').textContent=changes[0]?fmtLocalDate(changes[0].date):'Nessuna modifica';
+}
 function updateCountdown(date){const box=document.getElementById('countdown');if(!box)return;const ms=Math.max(0,new Date(date)-new Date()),d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1000);box.innerHTML=[['Giorni',d],['Ore',h],['Min',m],['Sec',s]].map(x=>`<div class="countbox"><strong>${x[1]}</strong><span>${x[0]}</span></div>`).join('')}
 setInterval(()=>{const e=futureEvents()[0];if(e)updateCountdown(e.date)},1000)
 function renderRegistration(){const e=futureEvents()[0],box=document.getElementById('publicRegistration');if(!e){box.innerHTML='<div class="empty">Nessuna registrazione o attività programmata.</div>';return}box.innerHTML=`<div class="card registration-card"><div><div class="role">${esc(e.category)}</div><h3 style="font-size:1.65rem">${esc(e.title)}</h3><p>${esc(e.description||'Attività programmata dallo staff.')}</p><div class="tag">${fmtDate(e.date)}</div><div class="countdown" id="countdown"></div></div><div class="registration-media">${e.image?`<img src="${esc(e.image)}" onerror="this.parentElement.innerHTML='<div class=empty>Immagine non disponibile</div>'" alt="${esc(e.title)}">`:'<div class="empty" style="margin:22px">Nessuna immagine associata</div>'}</div></div>`;updateCountdown(e.date)}
@@ -823,6 +887,9 @@ function openChangeModal(id=''){
   `);
 }
 function saveChange(id){
+  state.deletedChangeIds=Array.isArray(state.deletedChangeIds)?state.deletedChangeIds:[];
+  if(id)state.deletedChangeIds=state.deletedChangeIds.filter(x=>x!==id);
+
   const title=document.getElementById('cTitle').value.trim();
   const body=document.getElementById('cText').value.trim();
   const date=document.getElementById('cDate').value;
@@ -850,7 +917,13 @@ function saveChange(id){
   closeModal('genericModal');
   saveData(published?'Comunicazione pubblicata':'Bozza salvata');
 }
-function deleteChange(id){if(!confirm('Eliminare questa modifica pubblica?'))return;state.changes=state.changes.filter(x=>x.id!==id);saveData('Modifica rimossa')}
+function deleteChange(id){
+  if(!confirm('Eliminare definitivamente questa comunicazione?'))return;
+  state.deletedChangeIds=Array.isArray(state.deletedChangeIds)?state.deletedChangeIds:[];
+  if(!state.deletedChangeIds.includes(id))state.deletedChangeIds.push(id);
+  state.changes=(state.changes||[]).filter(x=>x.id!==id);
+  saveData('Comunicazione eliminata');
+}
 function renderChangesManager(){
   const box=document.getElementById('changesManager');if(!box)return;
   if(!state.changes.length){
@@ -1667,13 +1740,18 @@ async function init(){
   app=initializeApp(window.FIREBASE_CONFIG);auth=getAuth(app);db=getFirestore(app);await setPersistence(auth,browserLocalPersistence);subscribePublic();
   onAuthStateChanged(auth,async fbUser=>{
    if(!fbUser){
-     currentProfile=null;window.communityUid=null;
+     currentProfile=null;
+     window.communityUid=null;
+     window.__firebaseStaffSession=false;
      window.onFirebaseStaffSession?.(false,null);
      if(unsubPrivate){unsubPrivate();unsubPrivate=null}
-     // L'anonimo viene creato solo per l'area Community.
-     const anon=await signInAnonymously(auth);
-     window.communityUid=anon.user.uid;
-     await refreshCommunityData(false);
+
+     // IMPORTANTE:
+     // non viene creato automaticamente un account anonimo qui.
+     // In questo modo il login Staff non entra più in gara con signInAnonymously().
+     // L'account anonimo verrà creato SOLO quando una funzione Community ne ha bisogno.
+     await refreshPublicThreads();
+     await refreshSpoilers();
      window.onCloudStatus?.(true,false);
      return;
    }
@@ -1750,7 +1828,8 @@ function subscribePublicThreads(){return refreshPublicThreads()}
 function subscribePrivateThreads(staffMode){return refreshPrivateThreads(staffMode)}
 function watchReplies(threadId){return refreshReplies(threadId)}
 async function login(email,password){
-  if(auth.currentUser&&!currentProfile)await signOut(auth);
+  // signInWithEmailAndPassword sostituisce direttamente l'eventuale sessione anonima.
+  // Evitiamo signOut() qui perché scatenava una race condition con onAuthStateChanged.
   const cred=await signInWithEmailAndPassword(auth,email,password);
   const profile=await profileFor(cred.user.uid);
   if(!isStaffProfile(profile)){await signOut(auth);throw new Error('Account non autorizzato')}
@@ -1765,19 +1844,42 @@ async function login(email,password){
 async function logout(){
   window.__firebaseStaffSession=false;
   window.onFirebaseStaffSession?.(false,null);
-  if(auth)await signOut(auth);
+  if(auth?.currentUser)await signOut(auth);
   currentProfile=null;
+  window.communityUid=null;
 
-  // Dopo il logout Staff, torna a una sessione Community anonima.
-  if(!auth.currentUser){
-    const cred=await signInAnonymously(auth);
-    window.communityUid=cred.user.uid;
-  }else{
-    window.communityUid=auth.currentUser.uid;
-  }
-  await refreshCommunityData(false);
+  // Restiamo realmente disconnessi.
+  // Se l'utente apre/usa il Forum, ensureAnonymous() creerà lì la sessione Community.
+  await refreshPublicThreads();
+  await refreshSpoilers();
 }
-async function saveState(s){if(!auth?.currentUser||!currentProfile)throw new Error('Non autenticato');const publicData={members:s.members||[],events:s.events||[],changes:s.changes||[],gallery:s.gallery||[],rules:s.rules||'',rulesUpdated:s.rulesUpdated||null,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};const privateData={attendance:s.attendance||{},attendanceHistory:s.attendanceHistory||[],reminders:s.reminders||[],evaluations:s.evaluations||[],rooms:s.rooms||[],updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};await Promise.all([setDoc(doc(db,'portal_public','main'),publicData,{merge:true}),setDoc(doc(db,'portal_private','main'),privateData,{merge:true})])}
+async function saveState(s){
+  if(!auth?.currentUser||!currentProfile||!isStaffProfile(currentProfile))throw new Error('Non autenticato');
+  const publicData={
+    members:s.members||[],
+    events:s.events||[],
+    changes:s.changes||[],
+    deletedChangeIds:s.deletedChangeIds||[],
+    gallery:s.gallery||[],
+    rules:s.rules||'',
+    rulesUpdated:s.rulesUpdated||null,
+    updatedAt:new Date().toISOString(),
+    updatedBy:currentProfile.username||''
+  };
+  const privateData={
+    attendance:s.attendance||{},
+    attendanceHistory:s.attendanceHistory||[],
+    reminders:s.reminders||[],
+    evaluations:s.evaluations||[],
+    rooms:s.rooms||[],
+    updatedAt:new Date().toISOString(),
+    updatedBy:currentProfile.username||''
+  };
+  await Promise.all([
+    setDoc(doc(db,'portal_public','main'),publicData,{merge:true}),
+    setDoc(doc(db,'portal_private','main'),privateData,{merge:true})
+  ]);
+}
 async function reload(){const pub=await getDoc(doc(db,'portal_public','main'));if(pub.exists())window.applyPublicCloud?.(pub.data());if(currentProfile){const pri=await getDoc(doc(db,'portal_private','main'));if(pri.exists())window.applyPrivateCloud?.(pri.data())}}
 async function getSessionState(){
   const fbUser=auth?.currentUser||null;
