@@ -802,7 +802,8 @@ async function createThread(k){
     console.error('Forum create error:',e);
     const code=String(e?.code||e?.message||'');
     let msg='Errore durante la pubblicazione.';
-    if(code.includes('operation-not-allowed'))msg='Forum non ancora abilitato: attiva Authentication → Anonimo in Firebase.';
+    if(code.includes('INTERNAL ASSERTION FAILED'))msg='Errore interno Firestore rilevato. La V7.10 usa una modalità Forum più stabile senza listener realtime multipli.';
+    else if(code.includes('operation-not-allowed'))msg='Forum non ancora abilitato: attiva Authentication → Anonimo in Firebase.';
     else if(code.includes('permission-denied'))msg='Firestore sta bloccando il Forum: pubblica le regole V7.9 incluse nello ZIP.';
     else if(code.includes('auth/not-ready')||code.includes('community/not-ready'))msg='Il servizio Forum non è ancora pronto. Ricarica la pagina e riprova.';
     else if(code.includes('unavailable')||code.includes('network'))msg='Connessione a Firebase non disponibile. Controlla Internet e riprova.';
@@ -980,26 +981,97 @@ async function ensureAnonymous(){
 async function init(){
  if(!configured()){window.onCloudStatus?.(false,false);return}
  try{
-  app=initializeApp(window.FIREBASE_CONFIG);auth=getAuth(app);db=getFirestore(app);await setPersistence(auth,browserLocalPersistence);subscribePublic();subscribeSpoilers();
+  app=initializeApp(window.FIREBASE_CONFIG);auth=getAuth(app);db=getFirestore(app);await setPersistence(auth,browserLocalPersistence);subscribePublic();
   onAuthStateChanged(auth,async fbUser=>{
-   if(!fbUser){currentProfile=null;window.communityUid=null;if(unsubPrivate){unsubPrivate();unsubPrivate=null}if(unsubThreadsPrivate){unsubThreadsPrivate();unsubThreadsPrivate=null}await ensureAnonymous();return}
+   if(!fbUser){
+     currentProfile=null;window.communityUid=null;
+     if(unsubPrivate){unsubPrivate();unsubPrivate=null}
+     const anon=await ensureAnonymous();
+     window.communityUid=anon.uid;
+     await refreshCommunityData(false);
+     window.onCloudStatus?.(true,false);
+     return;
+   }
    window.communityUid=fbUser.uid;
    const profile=await profileFor(fbUser.uid);
-   if(isStaffProfile(profile)){currentProfile=profile;subscribePrivate();subscribePrivateThreads(true);window.onCloudStatus?.(true,true)}
-   else{currentProfile=null;if(unsubPrivate){unsubPrivate();unsubPrivate=null}subscribePrivateThreads(false);window.onCloudStatus?.(true,false)}
-   subscribePublicThreads();
+   if(isStaffProfile(profile)){
+     currentProfile=profile;
+     subscribePrivate();
+     await refreshCommunityData(true);
+     window.onCloudStatus?.(true,true);
+   }else{
+     currentProfile=null;
+     if(unsubPrivate){unsubPrivate();unsubPrivate=null}
+     await refreshCommunityData(false);
+     window.onCloudStatus?.(true,false);
+   }
   });
-  await ensureAnonymous();window.onCloudStatus?.(true,false)
+  const bootUser=await ensureAnonymous();
+  window.communityUid=bootUser.uid;
+  await refreshCommunityData(false);
+  window.onCloudStatus?.(true,false)
  }catch(e){console.error('Firebase init error',e);window.onCloudStatus?.(false,false)}
 }
 function subscribePublic(){if(unsubPublic)unsubPublic();unsubPublic=onSnapshot(doc(db,'portal_public','main'),snap=>{if(snap.exists())window.applyPublicCloud?.(snap.data())},e=>console.error('Public cloud listener',e))}
 function subscribePrivate(){if(unsubPrivate)unsubPrivate();unsubPrivate=onSnapshot(doc(db,'portal_private','main'),snap=>{if(snap.exists())window.applyPrivateCloud?.(snap.data())},e=>console.error('Private cloud listener',e))}
-function subscribeSpoilers(){if(unsubSpoilers)unsubSpoilers();unsubSpoilers=onSnapshot(query(collection(db,'spoilers'),orderBy('createdAt','desc')),snap=>window.applySpoilers?.(snap.docs.map(d=>({id:d.id,...d.data()}))),e=>console.error('Spoilers listener',e))}
-function subscribePublicThreads(){if(unsubThreadsPublic)unsubThreadsPublic();unsubThreadsPublic=onSnapshot(query(collection(db,'communityThreads'),where('visibility','==','public'),orderBy('createdAt','desc')),snap=>{const items=snap.docs.map(d=>({id:d.id,...d.data()}));window.applyForumPublic?.(items);items.forEach(t=>watchReplies(t.id))},e=>console.error('Forum public listener',e))}
-function subscribePrivateThreads(staffMode){if(unsubThreadsPrivate)unsubThreadsPrivate();if(!auth.currentUser)return;const q=staffMode?query(collection(db,'communityThreads'),where('visibility','==','private'),orderBy('createdAt','desc')):query(collection(db,'communityThreads'),where('visibility','==','private'),where('authorUid','==',auth.currentUser.uid),orderBy('createdAt','desc'));unsubThreadsPrivate=onSnapshot(q,snap=>{const items=snap.docs.map(d=>({id:d.id,...d.data()}));window.applyForumPrivate?.(items);items.forEach(t=>watchReplies(t.id))},e=>console.error('Forum private listener',e))}
-function watchReplies(threadId){if(replyUnsubs.has(threadId))return;const u=onSnapshot(query(collection(db,'communityThreads',threadId,'replies'),orderBy('createdAt','asc')),snap=>window.applyReplies?.(threadId,snap.docs.map(d=>({id:d.id,...d.data()}))),e=>console.error('Replies',e));replyUnsubs.set(threadId,u)}
-async function login(email,password){if(auth.currentUser&&!currentProfile)await signOut(auth);const cred=await signInWithEmailAndPassword(auth,email,password);const profile=await profileFor(cred.user.uid);if(!isStaffProfile(profile)){await signOut(auth);throw new Error('Account non autorizzato')}currentProfile=profile;window.communityUid=cred.user.uid;subscribePrivate();subscribePrivateThreads(true);window.onCloudStatus?.(true,true);return profile}
-async function logout(){if(auth)await signOut(auth);currentProfile=null;await ensureAnonymous()}
+async function refreshSpoilers(){
+  try{
+    const snap=await getDocs(query(collection(db,'spoilers'),orderBy('createdAt','desc')));
+    window.applySpoilers?.(snap.docs.map(d=>({id:d.id,...d.data()})));
+  }catch(e){console.error('Spoilers refresh',e)}
+}
+async function refreshPublicThreads(){
+  try{
+    const snap=await getDocs(query(collection(db,'communityThreads'),where('visibility','==','public'),orderBy('createdAt','desc')));
+    const items=snap.docs.map(d=>({id:d.id,...d.data()}));
+    window.applyForumPublic?.(items);
+  }catch(e){console.error('Forum public refresh',e)}
+}
+async function refreshPrivateThreads(staffMode){
+  if(!auth.currentUser){window.applyForumPrivate?.([]);return}
+  try{
+    const q=staffMode
+      ? query(collection(db,'communityThreads'),where('visibility','==','private'),orderBy('createdAt','desc'))
+      : query(collection(db,'communityThreads'),where('visibility','==','private'),where('authorUid','==',auth.currentUser.uid),orderBy('createdAt','desc'));
+    const snap=await getDocs(q);
+    window.applyForumPrivate?.(snap.docs.map(d=>({id:d.id,...d.data()})));
+  }catch(e){console.error('Forum private refresh',e)}
+}
+async function refreshReplies(threadId){
+  try{
+    const snap=await getDocs(query(collection(db,'communityThreads',threadId,'replies'),orderBy('createdAt','asc')));
+    window.applyReplies?.(threadId,snap.docs.map(d=>({id:d.id,...d.data()})));
+  }catch(e){console.error('Replies refresh',e)}
+}
+async function refreshCommunityData(staffMode=!!currentProfile){
+  await Promise.allSettled([
+    refreshSpoilers(),
+    refreshPublicThreads(),
+    refreshPrivateThreads(staffMode)
+  ]);
+}
+function subscribeSpoilers(){return refreshSpoilers()}
+function subscribePublicThreads(){return refreshPublicThreads()}
+function subscribePrivateThreads(staffMode){return refreshPrivateThreads(staffMode)}
+function watchReplies(threadId){return refreshReplies(threadId)}
+async function login(email,password){
+  if(auth.currentUser&&!currentProfile)await signOut(auth);
+  const cred=await signInWithEmailAndPassword(auth,email,password);
+  const profile=await profileFor(cred.user.uid);
+  if(!isStaffProfile(profile)){await signOut(auth);throw new Error('Account non autorizzato')}
+  currentProfile=profile;window.communityUid=cred.user.uid;
+  subscribePrivate();
+  await refreshCommunityData(true);
+  window.onCloudStatus?.(true,true);
+  return profile;
+}
+async function logout(){
+  if(auth)await signOut(auth);
+  currentProfile=null;
+  const anon=await ensureAnonymous();
+  window.communityUid=anon.uid;
+  await refreshCommunityData(false);
+}
 async function saveState(s){if(!auth?.currentUser||!currentProfile)throw new Error('Non autenticato');const publicData={members:s.members||[],events:s.events||[],changes:s.changes||[],gallery:s.gallery||[],rules:s.rules||'',rulesUpdated:s.rulesUpdated||null,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};const privateData={attendance:s.attendance||{},attendanceHistory:s.attendanceHistory||[],reminders:s.reminders||[],evaluations:s.evaluations||[],rooms:s.rooms||[],updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};await Promise.all([setDoc(doc(db,'portal_public','main'),publicData,{merge:true}),setDoc(doc(db,'portal_private','main'),privateData,{merge:true})])}
 async function reload(){const pub=await getDoc(doc(db,'portal_public','main'));if(pub.exists())window.applyPublicCloud?.(pub.data());if(currentProfile){const pri=await getDoc(doc(db,'portal_private','main'));if(pri.exists())window.applyPrivateCloud?.(pri.data())}}
 window.firebaseBridge={login,logout,saveState,reload};
@@ -1015,23 +1087,36 @@ async function createThread(data){
     updatedAt:new Date().toISOString()
   };
   const ref=await addDoc(collection(db,'communityThreads'),payload);
-  watchReplies(ref.id);
+  await refreshCommunityData(!!currentProfile);
+  await refreshReplies(ref.id);
   return ref.id;
 }
-async function updateThread(id,patch){await updateDoc(doc(db,'communityThreads',id),{...patch,updatedAt:new Date().toISOString()})}
-async function deleteThread(id){await deleteDoc(doc(db,'communityThreads',id))}
-async function toggleVote(id){await ensureAnonymous();const ref=doc(db,'communityThreads',id),snap=await getDoc(ref);if(!snap.exists())return;const votes=snap.data().votes||[],me=auth.currentUser.uid;await updateDoc(ref,{votes:votes.includes(me)?arrayRemove(me):arrayUnion(me),updatedAt:new Date().toISOString()})}
-async function addReply(tid,data){await ensureAnonymous();return addDoc(collection(db,'communityThreads',tid,'replies'),{...data,authorUid:auth.currentUser.uid,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()})}
-async function updateReply(tid,rid,patch){await updateDoc(doc(db,'communityThreads',tid,'replies',rid),{...patch,updatedAt:new Date().toISOString()})}
-async function deleteReply(tid,rid){await deleteDoc(doc(db,'communityThreads',tid,'replies',rid))}
-async function saveSpoiler(id,data){if(!currentProfile)throw new Error('Solo staff');if(id)return updateDoc(doc(db,'spoilers',id),{...data,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username});return addDoc(collection(db,'spoilers'),{...data,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),createdBy:currentProfile.username})}
-async function updateSpoiler(id,patch){if(!currentProfile)throw new Error('Solo staff');return updateDoc(doc(db,'spoilers',id),{...patch,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username})}
-async function deleteSpoiler(id){if(!currentProfile)throw new Error('Solo staff');return deleteDoc(doc(db,'spoilers',id))}
-function watchSpoilerComments(sid){if(spoilerCommentUnsubs.has(sid))return;const u=onSnapshot(query(collection(db,'spoilers',sid,'comments'),orderBy('createdAt','asc')),snap=>window.applySpoilerComments?.(sid,snap.docs.map(d=>({id:d.id,...d.data()}))),e=>console.error('Spoiler comments',e));spoilerCommentUnsubs.set(sid,u)}
-async function addSpoilerComment(sid,data){await ensureAnonymous();return addDoc(collection(db,'spoilers',sid,'comments'),{...data,authorUid:auth.currentUser.uid,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()})}
-async function updateSpoilerComment(sid,rid,patch){return updateDoc(doc(db,'spoilers',sid,'comments',rid),{...patch,updatedAt:new Date().toISOString()})}
-async function deleteSpoilerComment(sid,rid){return deleteDoc(doc(db,'spoilers',sid,'comments',rid))}
-window.communityBridge={createThread,updateThread,deleteThread,toggleVote,addReply,updateReply,deleteReply,saveSpoiler,updateSpoiler,deleteSpoiler,watchSpoilerComments,addSpoilerComment,updateSpoilerComment,deleteSpoilerComment};
+async function updateThread(id,patch){await updateDoc(doc(db,'communityThreads',id),{...patch,updatedAt:new Date().toISOString()});await refreshCommunityData(!!currentProfile)}
+async function deleteThread(id){await deleteDoc(doc(db,'communityThreads',id));await refreshCommunityData(!!currentProfile)}
+async function toggleVote(id){await ensureAnonymous();const ref=doc(db,'communityThreads',id),snap=await getDoc(ref);if(!snap.exists())return;const votes=snap.data().votes||[],me=auth.currentUser.uid;await updateDoc(ref,{votes:votes.includes(me)?arrayRemove(me):arrayUnion(me),updatedAt:new Date().toISOString()});await refreshPublicThreads()}
+async function addReply(tid,data){await ensureAnonymous();const ref=await addDoc(collection(db,'communityThreads',tid,'replies'),{...data,authorUid:auth.currentUser.uid,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});await refreshReplies(tid);return ref}
+async function updateReply(tid,rid,patch){await updateDoc(doc(db,'communityThreads',tid,'replies',rid),{...patch,updatedAt:new Date().toISOString()});await refreshReplies(tid)}
+async function deleteReply(tid,rid){await deleteDoc(doc(db,'communityThreads',tid,'replies',rid));await refreshReplies(tid)}
+async function saveSpoiler(id,data){
+  if(!currentProfile)throw new Error('Solo staff');
+  let result;
+  if(id) result=await updateDoc(doc(db,'spoilers',id),{...data,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username});
+  else result=await addDoc(collection(db,'spoilers'),{...data,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),createdBy:currentProfile.username});
+  await refreshSpoilers();
+  return result;
+}
+async function updateSpoiler(id,patch){if(!currentProfile)throw new Error('Solo staff');await updateDoc(doc(db,'spoilers',id),{...patch,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username});await refreshSpoilers()}
+async function deleteSpoiler(id){if(!currentProfile)throw new Error('Solo staff');await deleteDoc(doc(db,'spoilers',id));await refreshSpoilers()}
+async function watchSpoilerComments(sid){
+  try{
+    const snap=await getDocs(query(collection(db,'spoilers',sid,'comments'),orderBy('createdAt','asc')));
+    window.applySpoilerComments?.(sid,snap.docs.map(d=>({id:d.id,...d.data()})));
+  }catch(e){console.error('Spoiler comments refresh',e)}
+}
+async function addSpoilerComment(sid,data){await ensureAnonymous();const ref=await addDoc(collection(db,'spoilers',sid,'comments'),{...data,authorUid:auth.currentUser.uid,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});await watchSpoilerComments(sid);return ref}
+async function updateSpoilerComment(sid,rid,patch){await updateDoc(doc(db,'spoilers',sid,'comments',rid),{...patch,updatedAt:new Date().toISOString()});await watchSpoilerComments(sid)}
+async function deleteSpoilerComment(sid,rid){await deleteDoc(doc(db,'spoilers',sid,'comments',rid));await watchSpoilerComments(sid)}
+window.communityBridge={createThread,updateThread,deleteThread,toggleVote,addReply,updateReply,deleteReply,saveSpoiler,updateSpoiler,deleteSpoiler,watchSpoilerComments,addSpoilerComment,updateSpoilerComment,deleteSpoilerComment,refreshCommunityData,refreshReplies};
 init();
 </script>
 
