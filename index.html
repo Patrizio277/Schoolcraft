@@ -563,6 +563,28 @@ function onCloudStatus(ready,connected){
 window.onCloudStatus=onCloudStatus;
 function loadSession(){try{return JSON.parse(sessionStorage.getItem(SESSION))}catch(e){return null}}
 function saveSession(){if(user)sessionStorage.setItem(SESSION,JSON.stringify(user));else sessionStorage.removeItem(SESSION)}
+
+window.onFirebaseStaffSession=function(valid,profile=null){
+  window.__firebaseStaffSession=!!valid;
+
+  if(valid&&profile){
+    // Firebase è la fonte di verità dell'account Staff.
+    user={
+      name:profile.username||user?.name||'Staff',
+      role:profile.role||user?.role||'Staff',
+      permission:profile.permission,
+      uid:profile.uid
+    };
+    saveSession();
+  }else if(user&&['owner','admin'].includes(user.permission)){
+    // Evita la situazione "pannello Staff / Firebase anonimo".
+    user=null;
+    saveSession();
+    teamManageMode=false;
+  }
+
+  try{renderAccounts()}catch(e){}
+}
 function uid(p='x'){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function fmtDate(v,withTime=true){if(!v)return'—';const d=new Date(v);return new Intl.DateTimeFormat('it-IT',withTime?{dateStyle:'medium',timeStyle:'short'}:{dateStyle:'medium'}).format(d)}
@@ -985,7 +1007,12 @@ const FORUM_CATEGORIES={
 };
 const LOUNGE_TOPICS=['☕ Discussione Generale','📸 Foto & Screenshot RP','🎥 Clip e Video','😂 Meme della Community','📖 Storie dei Personaggi','👋 Presentati alla Community','🎉 Eventi e Iniziative'];
 function mcHead(n){return `https://mc-heads.net/avatar/${encodeURIComponent(n||'Steve')}/64`}
-function isStaff(){return !!user&&['owner','admin'].includes(user.permission)}
+window.__firebaseStaffSession=window.__firebaseStaffSession===true;
+function isStaff(){
+  return !!user
+    && ['owner','admin'].includes(user.permission)
+    && window.__firebaseStaffSession===true;
+}
 function ensureCommunityProfile(cb){
   if(isStaff()){cb?.();return}
   if(communityProfile?.name&&communityProfile?.minecraft){cb?.();return}
@@ -998,12 +1025,31 @@ function openForumLogin(cb){
     <div class="field"><label>Nome visualizzato</label><input id="cpName" class="input" autocomplete="nickname" placeholder="Es. Francesco"></div>
     <div class="field"><label>Nickname Minecraft</label><input id="cpMc" class="input" autocomplete="off" placeholder="Es. ziofede82"></div>
     <div class="card" style="padding:12px;margin:4px 0 16px;box-shadow:none"><div class="muted" style="font-size:.72rem;line-height:1.55">Il nickname Minecraft serve anche per mostrare la tua testa accanto a discussioni e messaggi.</div></div>
+    <div id="communityReservedError" class="notice hidden" style="margin-bottom:12px;border-color:rgba(255,102,122,.35);color:#ffd8de"></div>
     <button class="btn primary" style="width:100%" onclick="saveCommunityProfile()">Accedi al Forum</button>
   `);
 }
 function saveCommunityProfile(){
-  const name=document.getElementById('cpName').value.trim(),minecraft=document.getElementById('cpMc').value.trim();
+  const name=document.getElementById('cpName').value.trim();
+  const minecraft=document.getElementById('cpMc').value.trim();
   if(!name||!minecraft)return toast('Inserisci nome e nickname Minecraft');
+
+  // I nomi ufficiali dello Staff sono riservati e non possono essere usati
+  // tramite il semplice profilo Community.
+  const reservedStaffNames=['ziofede82','alessia','26kmanuu'];
+  const norm=v=>String(v||'').trim().toLowerCase();
+  if(reservedStaffNames.includes(norm(name))||reservedStaffNames.includes(norm(minecraft))){
+    const err=document.getElementById('communityReservedError');
+    if(err){
+      err.classList.remove('hidden');
+      err.textContent='Questo nome è riservato allo Staff Schoolcraft. Per usarlo devi accedere tramite il pulsante Staff con le credenziali autorizzate.';
+    }else{
+      toast('Nome riservato allo Staff');
+    }
+    scSound?.('warning');
+    return;
+  }
+
   communityProfile={name,minecraft};
   localStorage.setItem(COMMUNITY_PROFILE_KEY,JSON.stringify(communityProfile));
   closeModal('genericModal');
@@ -1406,9 +1452,9 @@ async function deleteThreadFromAdmin(id){
       openGeneric('Sessione Staff da riconnettere',`
         <div class="notice">
           Il pannello ti riconosce come Staff, ma Firebase non sta usando in questo momento la sessione Staff corretta.
-          <br><br><strong>Questa è una sessione rimasta dalla versione precedente.</strong><br><br>
-          Premi il pulsante qui sotto: verrai disconnesso correttamente da Firebase e potrai fare un nuovo accesso Staff. Dopo quel nuovo accesso la sessione resterà sincronizzata anche ai prossimi caricamenti.
-          <div style="margin-top:14px"><button class="btn primary" onclick="repairStaffSession()">Riconnetti account Staff</button></div>
+          <br><br>La sessione visuale è stata chiusa automaticamente perché Firebase non la riconosceva come Staff.<br><br>
+          Premi <strong>Accedi come Staff</strong> e inserisci nuovamente nome e password. Da questa versione il sito considera Staff soltanto una sessione realmente verificata da Firebase.
+          <div style="margin-top:14px"><button class="btn primary" onclick="closeModal('genericModal');openLogin()">Accedi come Staff</button></div>
         </div>`);
     }else if(code.includes('permission-denied')){
       openGeneric('Eliminazione bloccata da Firebase',`
@@ -1622,22 +1668,30 @@ async function init(){
   onAuthStateChanged(auth,async fbUser=>{
    if(!fbUser){
      currentProfile=null;window.communityUid=null;
+     window.onFirebaseStaffSession?.(false,null);
      if(unsubPrivate){unsubPrivate();unsubPrivate=null}
-     const anon=await ensureAnonymous();
-     window.communityUid=anon.uid;
+     // L'anonimo viene creato solo per l'area Community.
+     const anon=await signInAnonymously(auth);
+     window.communityUid=anon.user.uid;
      await refreshCommunityData(false);
      window.onCloudStatus?.(true,false);
      return;
    }
+
    window.communityUid=fbUser.uid;
    const profile=await profileFor(fbUser.uid);
+
    if(isStaffProfile(profile)){
      currentProfile=profile;
+     window.__firebaseStaffSession=true;
+     window.onFirebaseStaffSession?.(true,profile);
      subscribePrivate();
      await refreshCommunityData(true);
      window.onCloudStatus?.(true,true);
    }else{
      currentProfile=null;
+     window.__firebaseStaffSession=false;
+     window.onFirebaseStaffSession?.(false,null);
      if(unsubPrivate){unsubPrivate();unsubPrivate=null}
      await refreshCommunityData(false);
      window.onCloudStatus?.(true,false);
@@ -1701,16 +1755,26 @@ async function login(email,password){
   const profile=await profileFor(cred.user.uid);
   if(!isStaffProfile(profile)){await signOut(auth);throw new Error('Account non autorizzato')}
   currentProfile=profile;window.communityUid=cred.user.uid;
+  window.__firebaseStaffSession=true;
+  window.onFirebaseStaffSession?.(true,profile);
   subscribePrivate();
   await refreshCommunityData(true);
   window.onCloudStatus?.(true,true);
   return profile;
 }
 async function logout(){
+  window.__firebaseStaffSession=false;
+  window.onFirebaseStaffSession?.(false,null);
   if(auth)await signOut(auth);
   currentProfile=null;
-  const anon=await ensureAnonymous();
-  window.communityUid=anon.uid;
+
+  // Dopo il logout Staff, torna a una sessione Community anonima.
+  if(!auth.currentUser){
+    const cred=await signInAnonymously(auth);
+    window.communityUid=cred.user.uid;
+  }else{
+    window.communityUid=auth.currentUser.uid;
+  }
   await refreshCommunityData(false);
 }
 async function saveState(s){if(!auth?.currentUser||!currentProfile)throw new Error('Non autenticato');const publicData={members:s.members||[],events:s.events||[],changes:s.changes||[],gallery:s.gallery||[],rules:s.rules||'',rulesUpdated:s.rulesUpdated||null,updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};const privateData={attendance:s.attendance||{},attendanceHistory:s.attendanceHistory||[],reminders:s.reminders||[],evaluations:s.evaluations||[],rooms:s.rooms||[],updatedAt:new Date().toISOString(),updatedBy:currentProfile.username||''};await Promise.all([setDoc(doc(db,'portal_public','main'),publicData,{merge:true}),setDoc(doc(db,'portal_private','main'),privateData,{merge:true})])}
@@ -1765,19 +1829,21 @@ async function updateThread(id,patch){
 async function ensureStaffSession(){
   if(!auth?.currentUser)throw new Error('staff-session-missing');
 
-  // Se il profilo è già stato caricato ed è valido, procedi.
-  if(isStaffProfile(currentProfile))return currentProfile;
+  const profile=isStaffProfile(currentProfile)
+    ? currentProfile
+    : await profileFor(auth.currentUser.uid);
 
-  // In alcuni casi la UI può risultare già loggata mentre onAuthStateChanged
-  // sta ancora caricando il profilo Firestore. Lo rileggiamo direttamente.
-  const profile=await profileFor(auth.currentUser.uid);
   if(isStaffProfile(profile)){
     currentProfile=profile;
     window.communityUid=auth.currentUser.uid;
+    window.__firebaseStaffSession=true;
+    window.onFirebaseStaffSession?.(true,profile);
     return profile;
   }
 
-  // L'utente visuale risulta staff, ma Firebase è su una sessione anonima/non staff.
+  // Non manteniamo più una UI Staff falsa: viene scollegata subito.
+  window.__firebaseStaffSession=false;
+  window.onFirebaseStaffSession?.(false,null);
   throw new Error('staff-session-mismatch');
 }
 async function deleteThread(id){
