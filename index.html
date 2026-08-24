@@ -299,6 +299,26 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
 @media(max-width:760px){.change-viewer-cover{height:210px}.change-viewer-body{padding:18px}.thread-admin-actions{grid-template-columns:1fr}}
 </style>
 
+
+<style id="schoolcraft-v715-modal-scroll">
+.change-viewer{
+  overflow-y:auto!important;
+  overscroll-behavior:contain;
+  padding:18px;
+}
+.change-viewer .modal-card{
+  max-height:none!important;
+  overflow:visible!important;
+  margin:auto;
+}
+.change-viewer-body{
+  max-height:none!important;
+}
+@media(max-height:720px){
+  .change-viewer .modal-card{margin:12px auto}
+}
+</style>
+
 </head>
 <body>
 
@@ -1366,10 +1386,38 @@ async function deleteThreadFromAdmin(id){
     closeModal('genericModal');
     forumRoute='';
     renderForum();
-    toast('Discussione eliminata');
-  }catch(e){console.error(e);toast('Errore durante eliminazione della discussione')}
+    scSound?.('success');
+    toast('Discussione eliminata definitivamente');
+  }catch(e){
+    console.error('Delete thread error:',e);
+    const code=String(e?.code||e?.message||'');
+    if(code.includes('staff-session-mismatch')||code.includes('staff-session-missing')){
+      openGeneric('Sessione Staff da riconnettere',`
+        <div class="notice">
+          Il pannello ti riconosce come Staff, ma Firebase non sta usando in questo momento la sessione Staff corretta.
+          <br><br><strong>Esci dall'account Staff e accedi di nuovo</strong>, poi riprova a eliminare la discussione.
+        </div>`);
+    }else if(code.includes('permission-denied')){
+      openGeneric('Eliminazione bloccata da Firebase',`
+        <div class="notice"><strong>Firestore ha rifiutato l'eliminazione.</strong><br><br>
+        Verifica che l'account con cui sei entrato sia ancora presente nella raccolta <b>staff</b> con:
+        <br><code>active = true</code>
+        <br><code>permission = owner</code> oppure <code>admin</code>.
+        </div>`);
+    }else{
+      openGeneric('Errore eliminazione',`<div class="notice">Non sono riuscito a eliminare la discussione.<br><br>Codice: <code>${esc(code||'sconosciuto')}</code></div>`);
+    }
+  }
 }
-async function deleteThread(id){if(!confirm('Eliminare definitivamente questa discussione?'))return;await window.communityBridge.deleteThread(id);forumBack();toast('Discussione eliminata')}
+async function deleteThread(id){
+  if(isStaff())return deleteThreadFromAdmin(id);
+  if(!confirm('Eliminare definitivamente questa discussione?'))return;
+  try{
+    await window.communityBridge.deleteThread(id);
+    forumBack();
+    toast('Discussione eliminata');
+  }catch(e){console.error(e);toast('Non puoi eliminare questa discussione')}
+}
 async function voteThread(id){ensureCommunityProfile(async()=>{await window.communityBridge.toggleVote(id)})}
 function editReply(tid,rid){const r=(state.communityReplies[tid]||[]).find(x=>x.id===rid);if(!r)return;openGeneric('Modifica messaggio',`<div class="field"><label>Messaggio</label><textarea id="editReplyBody" class="input">${esc(r.body)}</textarea></div><button class="btn primary" onclick="saveEditedReply('${tid}','${rid}')">Salva</button>`)}
 async function saveEditedReply(tid,rid){const body=document.getElementById('editReplyBody').value.trim();if(!body)return;await window.communityBridge.updateReply(tid,rid,{body});closeModal('genericModal');if(forumRoute==='thread:'+tid)renderForum()}
@@ -1675,15 +1723,41 @@ async function createThread(data){
   return full;
 }
 async function updateThread(id,patch){
+  await ensureStaffSession();
   const updatedAt=new Date().toISOString();
   await updateDoc(doc(db,'communityThreads',id),{...patch,updatedAt});
   const local=[...(state.forumPublic||[]),...(state.forumPrivate||[])].find(x=>x.id===id);
   if(local)Object.assign(local,patch,{updatedAt});
   forumSaveLocalCache();
   localStorage.setItem(KEY,JSON.stringify(state));
-  setTimeout(()=>refreshCommunityData(!!currentProfile),250);
+  setTimeout(()=>refreshCommunityData(true),250);
 }
-async function deleteThread(id){await deleteDoc(doc(db,'communityThreads',id));forumRemoveLocalThread(id);await refreshCommunityData(!!currentProfile)}
+async function ensureStaffSession(){
+  if(!auth?.currentUser)throw new Error('staff-session-missing');
+
+  // Se il profilo è già stato caricato ed è valido, procedi.
+  if(isStaffProfile(currentProfile))return currentProfile;
+
+  // In alcuni casi la UI può risultare già loggata mentre onAuthStateChanged
+  // sta ancora caricando il profilo Firestore. Lo rileggiamo direttamente.
+  const profile=await profileFor(auth.currentUser.uid);
+  if(isStaffProfile(profile)){
+    currentProfile=profile;
+    window.communityUid=auth.currentUser.uid;
+    return profile;
+  }
+
+  // L'utente visuale risulta staff, ma Firebase è su una sessione anonima/non staff.
+  throw new Error('staff-session-mismatch');
+}
+async function deleteThread(id){
+  await ensureStaffSession();
+  await deleteDoc(doc(db,'communityThreads',id));
+  forumRemoveLocalThread(id);
+  if(state.communityReplies)delete state.communityReplies[id];
+  localStorage.setItem(KEY,JSON.stringify(state));
+  await refreshCommunityData(true);
+}
 async function toggleVote(id){await ensureAnonymous();const ref=doc(db,'communityThreads',id),snap=await getDoc(ref);if(!snap.exists())return;const votes=snap.data().votes||[],me=auth.currentUser.uid;await updateDoc(ref,{votes:votes.includes(me)?arrayRemove(me):arrayUnion(me),updatedAt:new Date().toISOString()});await refreshPublicThreads()}
 async function addReply(tid,data){
   await ensureAnonymous();
