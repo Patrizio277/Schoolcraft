@@ -242,6 +242,44 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
 }
 </style>
 
+
+<style id="schoolcraft-changes-v713">
+.public-change-list{display:grid;gap:9px}
+.public-change-item{
+  border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#0b1928,#091522);
+  overflow:hidden;transition:.18s
+}
+.public-change-item:hover{border-color:rgba(77,214,255,.26)}
+.public-change-summary{
+  width:100%;border:0;background:transparent;color:var(--text);
+  padding:14px 15px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;text-align:left
+}
+.public-change-summary h3{margin:3px 0 0;font-size:.97rem;font-family:"Space Grotesk"}
+.public-change-summary .change-date{color:var(--muted);font-size:.67rem}
+.public-change-arrow{
+  width:34px;height:34px;border:1px solid var(--line);border-radius:9px;
+  display:grid;place-items:center;color:var(--cyan);transition:.2s
+}
+.public-change-item.open .public-change-arrow{transform:rotate(180deg)}
+.public-change-details{display:none;padding:0 15px 15px;border-top:1px solid rgba(255,255,255,.06)}
+.public-change-item.open .public-change-details{display:block}
+.public-change-details p{line-height:1.7;color:#c6d4df;margin:14px 0;white-space:pre-wrap}
+.public-change-image{width:100%;max-height:420px;object-fit:cover;border-radius:12px;border:1px solid var(--line);background:#06101c}
+.public-change-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.changes-admin-table{overflow:auto;border:1px solid var(--line);border-radius:15px;background:#07131f}
+.changes-admin-table table{min-width:900px}
+.changes-admin-table td .change-desc-preview{
+  max-width:380px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)
+}
+.change-image-thumb{width:58px;height:40px;object-fit:cover;border-radius:7px;border:1px solid var(--line);background:#06101c}
+.change-publish-state{display:inline-flex;align-items:center;gap:5px}
+.change-publish-state:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green)}
+@media(max-width:760px){
+  .public-change-summary{padding:12px}
+  .public-change-summary h3{font-size:.9rem}
+}
+</style>
+
 </head>
 <body>
 
@@ -355,7 +393,7 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
  <section class="panel" id="panel-attendance"><div class="dash-title"><div><div class="eyebrow">Operazioni</div><h1>Appello e presenza</h1></div></div><div class="toolbar"><button class="btn primary" onclick="openMemberModal()">+ Aggiungi persona</button><button class="btn" id="editMemberBtn" onclick="toggleEditMode()">Modifica</button><button class="btn danger" id="removeMemberBtn" onclick="toggleRemoveMode()">Rimuovi</button><button class="btn" onclick="markEveryone('present')">Tutti presenti</button><button class="btn" onclick="markEveryone('pending')">Azzera</button></div><div class="grid two"><div class="field"><label>Titolo salvataggio</label><input id="attendanceTitle" class="input" placeholder="Es. Registrazione episodio 12"></div><div class="field"><label>Categoria</label><select id="attendanceCategory" class="input"><option>Registrazione</option><option>Riunione</option><option>Evento</option><option>Altro</option></select></div></div><div id="attendanceTable"></div><div style="margin-top:16px"><button class="btn success" onclick="saveAttendance()">Salva appello</button></div></section>
  <section class="panel" id="panel-archive"><div class="dash-title"><div><div class="eyebrow">Storico</div><h1>Gestore Archivio</h1></div></div><div id="archiveList"></div></section>
  <section class="panel" id="panel-calendar"><div class="dash-title"><div><div class="eyebrow">Programmazione</div><h1>Calendario</h1><p class="muted">Clicca un giorno vuoto per creare subito un evento in quella data.</p></div><button class="btn primary" onclick="openEventModal()">+ Nuovo evento</button></div><div class="toolbar"><button class="btn small" onclick="dashShiftMonth(-1)">←</button><span class="tag" id="dashMonthLabel"></span><button class="btn small" onclick="dashShiftMonth(1)">→</button></div><div class="card calendar-card"><div class="calendar-scroll"><div id="dashCalendar" class="calendar"></div></div></div></section>
- <section class="panel" id="panel-changes"><div class="dash-title"><div><div class="eyebrow">Comunicazioni pubbliche</div><h1>Modifiche</h1><p class="muted">Solo ciò che pubblichi qui comparirà nella home.</p></div><button class="btn primary" onclick="openChangeModal()">+ Nuova modifica</button></div><div id="changesManager"></div></section>
+ <section class="panel" id="panel-changes"><div class="dash-title"><div><div class="eyebrow">Comunicazioni pubbliche</div><h1>Modifiche</h1><p class="muted">Crea comunicazioni ordinate con titolo, descrizione, data e immagine. Nella Home apparirà solo il titolo, espandibile dai visitatori.</p></div><button class="btn primary" onclick="openChangeModal()">+ Nuova modifica</button></div><div id="changesManager"></div></section>
  <section class="panel" id="panel-reminders"><div class="dash-title"><div><div class="eyebrow">To-do</div><h1>Promemoria</h1><p class="muted">Le schede restano compatte; apri solo quella che vuoi leggere.</p></div><button class="btn primary" onclick="openReminderModal()">+ Nuovo</button></div><div id="remindersList"></div></section>
  <section class="panel" id="panel-evaluations"><div class="dash-title"><div><div class="eyebrow">Direzione</div><h1>Valutazioni</h1></div><button class="btn primary" onclick="openEvaluationModal()">+ Aggiungi</button></div><div id="evaluationsList"></div></section>
  <section class="panel" id="panel-statistics"><div class="dash-title"><div><div class="eyebrow">Analisi</div><h1>Statistiche</h1></div></div><div id="statisticsContent"></div></section>
@@ -570,7 +608,38 @@ function renderHeroStatus(){const next=futureEvents()[0],changes=state.changes||
 function updateCountdown(date){const box=document.getElementById('countdown');if(!box)return;const ms=Math.max(0,new Date(date)-new Date()),d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1000);box.innerHTML=[['Giorni',d],['Ore',h],['Min',m],['Sec',s]].map(x=>`<div class="countbox"><strong>${x[1]}</strong><span>${x[0]}</span></div>`).join('')}
 setInterval(()=>{const e=futureEvents()[0];if(e)updateCountdown(e.date)},1000)
 function renderRegistration(){const e=futureEvents()[0],box=document.getElementById('publicRegistration');if(!e){box.innerHTML='<div class="empty">Nessuna registrazione o attività programmata.</div>';return}box.innerHTML=`<div class="card registration-card"><div><div class="role">${esc(e.category)}</div><h3 style="font-size:1.65rem">${esc(e.title)}</h3><p>${esc(e.description||'Attività programmata dallo staff.')}</p><div class="tag">${fmtDate(e.date)}</div><div class="countdown" id="countdown"></div></div><div class="registration-media">${e.image?`<img src="${esc(e.image)}" onerror="this.parentElement.innerHTML='<div class=empty>Immagine non disponibile</div>'" alt="${esc(e.title)}">`:'<div class="empty" style="margin:22px">Nessuna immagine associata</div>'}</div></div>`;updateCountdown(e.date)}
-function renderChanges(){const a=(state.changes||[]).slice(0,8),box=document.getElementById('publicChanges');box.innerHTML=a.length?a.map(c=>`<div class="activity"><i></i><div><strong>${esc(c.title)}</strong><div class="muted" style="font-size:.77rem">${fmtLocalDate(c.date)}</div><div style="margin-top:4px">${esc(c.text||'')}</div></div></div>`).join(''):`<div class="empty">Nessuna modifica pubblicata.</div>`}
+function renderChanges(){
+  const a=(state.changes||[]).filter(c=>c.published!==false).slice(0,10),box=document.getElementById('publicChanges');
+  if(!box)return;
+  box.classList.remove('card');
+  box.innerHTML=a.length
+    ? `<div class="public-change-list">${a.map(c=>`
+      <article class="public-change-item" id="publicChange-${c.id}">
+        <button class="public-change-summary" onclick="togglePublicChange('${c.id}')">
+          <div>
+            <div class="change-date">${fmtLocalDate(c.date)}</div>
+            <h3>${esc(c.title)}</h3>
+          </div>
+          <span class="public-change-arrow">⌄</span>
+        </button>
+        <div class="public-change-details">
+          <p>${esc(c.text||'')}</p>
+          ${c.image?`<img class="public-change-image" loading="lazy" src="${esc(c.image)}" onerror="this.style.display='none'" alt="${esc(c.title)}">`:''}
+          <div class="public-change-meta">
+            <span class="tag">Pubblicato il ${fmtLocalDate(c.date)}</span>
+            <span class="tag">Direzione Schoolcraft</span>
+          </div>
+        </div>
+      </article>`).join('')}</div>`
+    : `<div class="empty">Nessuna modifica pubblicata.</div>`;
+}
+function togglePublicChange(id){
+  const el=document.getElementById('publicChange-'+id);
+  if(!el)return;
+  const wasOpen=el.classList.contains('open');
+  document.querySelectorAll('.public-change-item.open').forEach(x=>x.classList.remove('open'));
+  if(!wasOpen){el.classList.add('open');scSound?.('open')}
+}
 
 function calendarHTML(base,mode){const y=base.getFullYear(),m=base.getMonth(),first=new Date(y,m,1),mondayOffset=(first.getDay()+6)%7,start=new Date(y,m,1-mondayOffset),days=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];let h=days.map(d=>`<div class="weekday">${d}</div>`).join('');for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const iso=localISO(d),ev=state.events.filter(e=>eventDate(e)===iso),other=d.getMonth()!==m;let click='';if(mode==='public')click=`onclick="openPublicDay('${iso}')"`;if(mode==='dash')click=`onclick="openEventModal('', '${iso}')"`;h+=`<div class="day clickable ${other?'other':''} ${iso===localISO()?'today':''}" ${click}><div class="daynum">${d.getDate()}</div>${ev.slice(0,2).map(e=>`<button class="event-pill" onclick="event.stopPropagation();${mode==='dash'?`editEvent('${e.id}')`:`showEventPublic('${e.id}')`}">${esc(e.title)}</button>`).join('')}${ev.length>2?`<div class="muted" style="font-size:.58rem;margin-top:3px">+${ev.length-2}</div>`:''}</div>`}return h}
 function renderCalendars(){document.getElementById('publicMonthLabel').textContent=publicMonth.toLocaleDateString('it-IT',{month:'long',year:'numeric'});document.getElementById('dashMonthLabel').textContent=dashMonth.toLocaleDateString('it-IT',{month:'long',year:'numeric'});document.getElementById('publicCalendar').innerHTML=calendarHTML(publicMonth,'public');document.getElementById('dashCalendar').innerHTML=calendarHTML(dashMonth,'dash')}
@@ -647,10 +716,120 @@ function editEvent(id){openEventModal(id)}
 function saveEvent(id){const title=document.getElementById('eTitle').value.trim(),date=document.getElementById('eDate').value,time=document.getElementById('eTime').value||'00:00';if(!title||!date)return toast('Titolo e data sono obbligatori');const dt=new Date(`${date}T${time}:00`);const obj={id:id||uid('e'),title,date:dt.toISOString(),category:document.getElementById('eCategory').value,description:document.getElementById('eDesc').value.trim(),image:document.getElementById('eImage').value.trim(),createdBy:user.name};if(id){state.events[state.events.findIndex(x=>x.id===id)]=obj}else state.events.push(obj);closeModal('genericModal');saveData('Evento salvato')}
 function deleteEvent(id){const e=state.events.find(x=>x.id===id);if(!e||!confirm('Eliminare questo evento?'))return;state.events=state.events.filter(x=>x.id!==id);closeModal('genericModal');saveData('Evento eliminato')}
 
-function openChangeModal(id=''){const c=id?state.changes.find(x=>x.id===id):null;openGeneric(c?'Modifica comunicazione':'Nuova modifica',`<div class="field"><label>Nome / Titolo</label><input id="cTitle" class="input" value="${esc(c?.title||'')}"></div><div class="field"><label>Descrizione</label><textarea id="cText" class="input">${esc(c?.text||'')}</textarea></div><div class="field"><label>Giorno</label><input id="cDate" type="date" class="input" value="${c?.date||localISO()}"></div><button class="btn primary" onclick="saveChange('${id}')">Pubblica</button>`)}
-function saveChange(id){const title=document.getElementById('cTitle').value.trim(),text=document.getElementById('cText').value.trim(),date=document.getElementById('cDate').value;if(!title||!text||!date)return toast('Compila titolo, descrizione e giorno');const obj={id:id||uid('c'),title,text,date,author:user.name};if(id)state.changes[state.changes.findIndex(x=>x.id===id)]=obj;else state.changes.unshift(obj);state.changes.sort((a,b)=>String(b.date).localeCompare(String(a.date)));closeModal('genericModal');saveData('Modifica pubblicata')}
+function openChangeModal(id=''){
+  const c=id?state.changes.find(x=>x.id===id):null;
+  openGeneric(c?'Modifica comunicazione':'Nuova comunicazione',`
+    <div class="notice" style="margin-bottom:16px">
+      Nella Home verrà mostrato soltanto il <strong>titolo</strong>. I visitatori potranno aprire la comunicazione con la freccia per leggere i dettagli.
+    </div>
+    <div class="field">
+      <label>Titolo della modifica</label>
+      <input id="cTitle" class="input" maxlength="120" value="${esc(c?.title||'')}" placeholder="Es. Schoolcraft V7.13 — Nuovo sistema Forum">
+    </div>
+    <div class="field">
+      <label>Descrizione completa</label>
+      <textarea id="cText" class="input" style="min-height:180px" placeholder="Descrivi in modo ordinato tutte le modifiche introdotte...">${esc(c?.text||'')}</textarea>
+    </div>
+    <div class="grid two">
+      <div class="field">
+        <label>Giorno di pubblicazione</label>
+        <input id="cDate" type="date" class="input" value="${c?.date||localISO()}">
+      </div>
+      <div class="field">
+        <label>Stato</label>
+        <select id="cPublished" class="input">
+          <option value="published" ${(c?.published??true)?'selected':''}>Pubblicata</option>
+          <option value="draft" ${c?.published===false?'selected':''}>Bozza</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Immagine facoltativa — URL</label>
+      <input id="cImage" class="input" value="${esc(c?.image||'')}" placeholder="https://...">
+    </div>
+    ${c?.image?`<img src="${esc(c.image)}" style="width:100%;max-height:250px;object-fit:cover;border-radius:12px;border:1px solid var(--line);margin-bottom:14px" onerror="this.style.display='none'">`:''}
+    <button class="btn primary" style="width:100%" onclick="saveChange('${id}')">${c?'Salva modifiche':'Pubblica comunicazione'}</button>
+  `);
+}
+function saveChange(id){
+  const title=document.getElementById('cTitle').value.trim();
+  const body=document.getElementById('cText').value.trim();
+  const date=document.getElementById('cDate').value;
+  const image=document.getElementById('cImage')?.value.trim()||'';
+  const published=document.getElementById('cPublished')?.value!=='draft';
+  if(!title||!body||!date)return toast('Compila titolo, descrizione e giorno');
+  const old=id?state.changes.find(x=>x.id===id):null;
+  const obj={
+    ...(old||{}),
+    id:id||uid('c'),
+    title,
+    text:body,
+    date,
+    image,
+    published,
+    author:old?.author||user.name,
+    updatedBy:user.name,
+    updatedAt:new Date().toISOString()
+  };
+  if(id){
+    const i=state.changes.findIndex(x=>x.id===id);
+    if(i>=0)state.changes[i]=obj;
+  }else state.changes.unshift(obj);
+  state.changes.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  closeModal('genericModal');
+  saveData(published?'Comunicazione pubblicata':'Bozza salvata');
+}
 function deleteChange(id){if(!confirm('Eliminare questa modifica pubblica?'))return;state.changes=state.changes.filter(x=>x.id!==id);saveData('Modifica rimossa')}
-function renderChangesManager(){const box=document.getElementById('changesManager');box.innerHTML=state.changes.length?state.changes.map(c=>`<div class="card" style="margin-bottom:10px"><div class="top"><div><div class="role">${fmtLocalDate(c.date)}</div><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p><div class="muted">Pubblicato da ${esc(c.author||'Staff')}</div></div><div><button class="btn small" onclick="openChangeModal('${c.id}')">Modifica</button> <button class="btn small danger" onclick="deleteChange('${c.id}')">Elimina</button></div></div></div>`).join(''):'<div class="empty">Nessuna modifica pubblicata.</div>'}
+function renderChangesManager(){
+  const box=document.getElementById('changesManager');if(!box)return;
+  if(!state.changes.length){
+    box.innerHTML='<div class="empty">Nessuna comunicazione creata.</div>';
+    return;
+  }
+  box.innerHTML=`<div class="changes-admin-table">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Comunicazione</th>
+          <th>Immagine</th>
+          <th>Stato</th>
+          <th>Pubblicato da</th>
+          <th>Azioni</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${state.changes.map(c=>`
+          <tr>
+            <td><strong>${fmtLocalDate(c.date)}</strong></td>
+            <td>
+              <strong>${esc(c.title)}</strong>
+              <div class="change-desc-preview" title="${esc(c.text||'')}">${esc(c.text||'')}</div>
+            </td>
+            <td>${c.image?`<img class="change-image-thumb" src="${esc(c.image)}" onerror="this.style.display='none'">`:'<span class="muted">—</span>'}</td>
+            <td>${c.published===false?'<span class="status pending">Bozza</span>':'<span class="status present change-publish-state">Pubblicata</span>'}</td>
+            <td>${esc(c.author||'Staff')}</td>
+            <td>
+              <div class="toolbar" style="margin:0;flex-wrap:nowrap">
+                <button class="btn small" onclick="openChangePreview('${c.id}')">Apri</button>
+                <button class="btn small" onclick="openChangeModal('${c.id}')">Modifica</button>
+                <button class="btn small danger" onclick="deleteChange('${c.id}')">Elimina</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+function openChangePreview(id){
+  const c=state.changes.find(x=>x.id===id);if(!c)return;
+  openGeneric(c.title,`
+    <div class="role">${fmtLocalDate(c.date)} · ${c.published===false?'BOZZA':'PUBBLICATA'}</div>
+    <p style="white-space:pre-wrap;line-height:1.75">${esc(c.text||'')}</p>
+    ${c.image?`<img src="${esc(c.image)}" style="width:100%;max-height:420px;object-fit:cover;border-radius:12px;border:1px solid var(--line)" onerror="this.style.display='none'">`:''}
+    <div class="muted" style="margin-top:12px">Autore: ${esc(c.author||'Staff')}</div>
+  `);
+}
 
 function renderReminders(){const box=document.getElementById('remindersList');box.innerHTML=state.reminders.length?state.reminders.map(r=>`<details class="reminder"><summary><div><div class="role">${r.status==='done'?'Completato':'Ancora da fare'}</div><strong>${esc(r.title)}</strong></div><span class="tag">Apri</span></summary><div class="reminder-body"><p>${esc(r.text||'')}</p>${r.image?`<img src="${esc(r.image)}" alt="">`:''}<div class="toolbar" style="margin-top:14px"><button class="btn small ${r.status==='done'?'':'success'}" onclick="toggleReminder('${r.id}')">${r.status==='done'?'Segna da fare':'Segna completato'}</button><button class="btn small danger" onclick="deleteReminder('${r.id}')">Elimina</button></div></div></details>`).join(''):'<div class="empty">Nessun promemoria.</div>'}
 function openReminderModal(){openGeneric('Nuovo promemoria',`<div class="field"><label>Titolo</label><input id="rTitle" class="input"></div><div class="field"><label>Descrizione</label><textarea id="rText" class="input"></textarea></div><div class="field"><label>URL immagine facoltativa</label><input id="rImage" class="input"></div><button class="btn primary" onclick="saveReminder()">Salva</button>`)}
@@ -837,6 +1016,66 @@ document.addEventListener('click',e=>{
   if(menu&&!menu.classList.contains('hidden')&&!e.target.closest('.community-profile-wrap'))menu.classList.add('hidden');
 });
 function categoryCard(key){const c=FORUM_CATEGORIES[key];return `<article class="forum-category" onclick="openForumCategory('${key}')"><div class="forum-icon">${c.icon}</div><div><h3>${c.title}</h3><p>${c.desc}</p></div><span class="privacy ${c.privacy}">${c.visibility.split('·')[0]}</span></article>`}
+
+const FORUM_LOCAL_CACHE_KEY='schoolcraft_forum_local_cache_v712';
+
+function forumLoadLocalCache(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(FORUM_LOCAL_CACHE_KEY)||'{}');
+    return {public:Array.isArray(raw.public)?raw.public:[],private:Array.isArray(raw.private)?raw.private:[]};
+  }catch(e){return {public:[],private:[]}}
+}
+function forumMerge(remote,local){
+  const map=new Map();
+  (local||[]).forEach(x=>{if(x?.id)map.set(x.id,x)});
+  (remote||[]).forEach(x=>{if(x?.id)map.set(x.id,{...(map.get(x.id)||{}),...x})});
+  return [...map.values()].sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+}
+function forumSaveLocalCache(){
+  try{
+    localStorage.setItem(FORUM_LOCAL_CACHE_KEY,JSON.stringify({
+      public:state.forumPublic||[],
+      private:state.forumPrivate||[]
+    }));
+  }catch(e){}
+}
+function forumHydrateLocalCache(){
+  const cache=forumLoadLocalCache();
+  state.forumPublic=forumMerge(state.forumPublic||[],cache.public||[]);
+  state.forumPrivate=forumMerge(state.forumPrivate||[],cache.private||[]);
+  window.__scForumPublicCache=state.forumPublic;
+  window.__scForumPrivateCache=state.forumPrivate;
+}
+function forumRemoveLocalThread(id){
+  state.forumPublic=(state.forumPublic||[]).filter(x=>x.id!==id);
+  state.forumPrivate=(state.forumPrivate||[]).filter(x=>x.id!==id);
+  window.__scForumPublicCache=state.forumPublic;
+  window.__scForumPrivateCache=state.forumPrivate;
+  forumSaveLocalCache();
+  localStorage.setItem(KEY,JSON.stringify(state));
+}
+forumHydrateLocalCache();
+
+function forumMyChatsHTML(){
+  if(isStaff())return '';
+  const mine=[...(state.forumPublic||[]),...(state.forumPrivate||[])]
+    .filter(t=>window.communityUid&&t.authorUid===window.communityUid)
+    .sort((a,b)=>new Date(b.updatedAt||b.createdAt||0)-new Date(a.updatedAt||a.createdAt||0))
+    .slice(0,8);
+  if(!mine.length)return '';
+  return `<div class="card" style="margin-bottom:18px">
+    <div class="top">
+      <div><div class="eyebrow">Le mie conversazioni</div><h3 style="margin:5px 0 0">Chat recenti</h3></div>
+      <span class="tag">${mine.length}</span>
+    </div>
+    <div style="display:grid;gap:8px;margin-top:12px">
+      ${mine.map(t=>`<button class="room-card" style="width:100%;text-align:left;color:var(--text);cursor:pointer" onclick="openThread('${t.id}')">
+        <div class="top"><strong>${esc(t.title)}</strong><span class="tag">${esc(t.status||'Aperta')}</span></div>
+        <div class="muted" style="font-size:.72rem;margin-top:5px">💬 ${(state.communityReplies?.[t.id]||[]).length} risposte · Apri chat →</div>
+      </button>`).join('')}
+    </div>
+  </div>`;
+}
 function renderForum(){
   renderCommunityProfileBar();
   const box=document.getElementById('forumContent');if(!box)return;
@@ -858,7 +1097,7 @@ function renderForum(){
       </div>`;
     return;
   }
-  if(!forumRoute){box.innerHTML=`<div class="forum-zones"><div class="forum-zone private"><div class="eyebrow">🔒 Centro Assistenza & Staff</div><h2>Canali riservati</h2><p class="muted">Le richieste private sono visibili esclusivamente al loro autore e allo staff autorizzato.</p>${categoryCard('advice')}${categoryCard('bugs')}${categoryCard('players')}</div><div class="forum-zone public"><div class="eyebrow">🌍 Community</div><h2>Spazi pubblici</h2><p class="muted">Condividi idee, discuti e partecipa alla vita della community Schoolcraft.</p>${categoryCard('proposals')}${categoryCard('lounge')}</div></div>${isStaff()?`<div class="notice" style="margin-top:16px"><strong>Modalità Staff:</strong> visualizzi anche tutte le richieste private e puoi moderare, cambiare stato e rispondere.</div>`:''}`;return}if(forumRoute.startsWith('thread:')){renderThreadDetail(forumRoute.slice(7));return}renderForumCategory(forumRoute)}
+  if(!forumRoute){box.innerHTML=`${forumMyChatsHTML()}<div class="forum-zones"><div class="forum-zone private"><div class="eyebrow">🔒 Centro Assistenza & Staff</div><h2>Canali riservati</h2><p class="muted">Le richieste private sono visibili esclusivamente al loro autore e allo staff autorizzato.</p>${categoryCard('advice')}${categoryCard('bugs')}${categoryCard('players')}</div><div class="forum-zone public"><div class="eyebrow">🌍 Community</div><h2>Spazi pubblici</h2><p class="muted">Condividi idee, discuti e partecipa alla vita della community Schoolcraft.</p>${categoryCard('proposals')}${categoryCard('lounge')}</div></div>${isStaff()?`<div class="notice" style="margin-top:16px"><strong>Modalità Staff:</strong> visualizzi anche tutte le richieste private e puoi moderare, cambiare stato e rispondere.</div>`:''}`;return}if(forumRoute.startsWith('thread:')){renderThreadDetail(forumRoute.slice(7));return}renderForumCategory(forumRoute)}
 function openForumCategory(k){forumRoute=k;renderForum();scrollTo(0,0)}
 function forumBack(){if(forumRoute.startsWith('thread:')){const id=forumRoute.slice(7),t=[...state.forumPublic,...state.forumPrivate].find(x=>x.id===id);forumRoute=t?.category||''}else forumRoute='';renderForum();scrollTo(0,0)}
 function threadListFor(k){const c=FORUM_CATEGORIES[k];return (c.privacy==='public'?state.forumPublic:state.forumPrivate).filter(t=>t.category===k).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))}
@@ -869,7 +1108,25 @@ async function refreshForumCategory(k){
     forumRoute=k;renderForum();toast('Discussioni aggiornate');
   }catch(e){console.error(e);toast('Errore aggiornamento Forum')}
 }
-function threadCard(t){const votes=(t.votes||[]).length,replies=(state.communityReplies[t.id]||[]).length;return `<article class="thread-card" onclick="openThread('${t.id}')"><div class="authorline"><img class="mc-avatar" src="${mcHead(t.minecraft)}"><div><div class="thread-meta"><strong>${esc(t.authorName||'Utente')}</strong><span>•</span><span>${esc(t.minecraft||'Steve')}</span><span>•</span><span>${fmtDate(t.createdAt)}</span></div><div class="thread-title">${esc(t.title)}</div></div></div><div class="thread-stats"><span class="status-chip">${esc(t.status||'Aperta')}</span><span>💬 ${replies} risposte</span>${t.category==='proposals'?`<span>👍 ${votes} voti</span>`:''}${t.locked?'<span>🔒 Chiusa</span>':''}</div></article>`}
+function threadCard(t){
+  const votes=(t.votes||[]).length,replies=(state.communityReplies[t.id]||[]).length;
+  return `<article class="thread-card" onclick="openThread('${t.id}')" style="cursor:pointer">
+    <div class="authorline">
+      <img class="mc-avatar" src="${mcHead(t.minecraft)}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'">
+      <div style="min-width:0">
+        <div class="thread-meta"><strong>${esc(t.authorName||'Utente')}</strong><span>•</span><span>${fmtDate(t.createdAt)}</span></div>
+        <div class="thread-title">${esc(t.title)}</div>
+      </div>
+    </div>
+    <div class="thread-stats">
+      <span class="status-chip">${esc(t.status||'Aperta')}</span>
+      <span>💬 ${replies} risposte</span>
+      ${t.category==='proposals'?`<span>👍 ${votes} voti</span>`:''}
+      ${t.locked?'<span>🔒 Chiusa</span>':''}
+      <strong style="margin-left:auto;color:var(--cyan)">Apri chat →</strong>
+    </div>
+  </article>`;
+}
 function openNewThread(k){ensureCommunityProfile(()=>{const c=FORUM_CATEGORIES[k];let extra='';if(k==='bugs')extra=`<div class="field"><label>Area interessata</label><select id="ftArea" class="input"><option>Server</option><option>Sito</option><option>Discord</option><option>Launcher</option></select></div><div class="field"><label>Come riprodurre il problema</label><textarea id="ftRepro" class="input"></textarea></div><div class="field"><label>Screenshot / video (URL, facoltativo)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Data e ora approssimativa</label><input id="ftWhen" class="input" type="datetime-local"></div>`;if(k==='players')extra=`<div class="field"><label>Giocatore segnalato</label><input id="ftTarget" class="input"></div><div class="field"><label>Motivazione</label><select id="ftReason" class="input"><option>RDM</option><option>VDM</option><option>FailRP</option><option>Toxicity</option><option>Altro</option></select></div><div class="field"><label>Data e ora</label><input id="ftWhen" class="input" type="datetime-local"></div><div class="field"><label>Prove screenshot/video (URL)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Eventuali testimoni</label><input id="ftWitness" class="input"></div>`;if(k==='lounge')extra=`<div class="field"><label>Area del Salotto</label><select id="ftTopic" class="input">${LOUNGE_TOPICS.map(x=>`<option>${x}</option>`).join('')}</select></div>`;openGeneric(`Nuova discussione · ${c.title}`,`<div class="field"><label>Nickname Minecraft</label><input class="input" value="${esc(communityProfile?.minecraft||user?.name||'')}" disabled></div><div class="field"><label>Titolo</label><input id="ftTitle" class="input" placeholder="Titolo chiaro e descrittivo"></div><div class="field"><label>Descrizione</label><textarea id="ftBody" class="input" placeholder="Scrivi tutti i dettagli utili..."></textarea></div>${extra}<button class="btn primary" onclick="createThread('${k}')">Pubblica / Invia</button>`)});}
 async function createThread(k){
   const title=document.getElementById('ftTitle').value.trim(),body=document.getElementById('ftBody').value.trim();
@@ -933,8 +1190,15 @@ function forumBubble(t,r){
 function renderThreadDetail(id){
   const t=[...state.forumPublic,...state.forumPrivate].find(x=>x.id===id);
   if(!t){
-    document.getElementById('forumContent').innerHTML=`<div class="empty">Discussione non disponibile. <button class="btn small" onclick="window.communityBridge?.refreshCommunityData?.(${isStaff()});setTimeout(()=>renderForum(),500)">Ricarica Forum</button></div>`;
-    return;
+    const cache=forumLoadLocalCache();
+    t=[...cache.public,...cache.private].find(x=>x.id===id);
+    if(t){
+      if(t.visibility==='public')state.forumPublic=forumMerge([t],state.forumPublic||[]);
+      else state.forumPrivate=forumMerge([t],state.forumPrivate||[]);
+    }else{
+      document.getElementById('forumContent').innerHTML=`<div class="empty"><strong>Discussione in sincronizzazione...</strong><br><span class="muted">Premi Ricarica se non compare entro pochi secondi.</span><div style="margin-top:12px"><button class="btn small" onclick="refreshOpenThread('${id}')">↻ Ricarica</button></div></div>`;
+      return;
+    }
   }
   const c=FORUM_CATEGORIES[t.category],replies=state.communityReplies[id]||[];
   const mine=window.communityUid&&t.authorUid===window.communityUid;
@@ -1027,20 +1291,29 @@ function editReply(tid,rid){const r=(state.communityReplies[tid]||[]).find(x=>x.
 async function saveEditedReply(tid,rid){const body=document.getElementById('editReplyBody').value.trim();if(!body)return;await window.communityBridge.updateReply(tid,rid,{body});closeModal('genericModal');if(forumRoute==='thread:'+tid)renderForum()}
 async function deleteReply(tid,rid){if(!confirm('Eliminare questo messaggio?'))return;await window.communityBridge.deleteReply(tid,rid);if(forumRoute==='thread:'+tid)renderForum()}
 function applyForumPublic(items){
-  const unique=[];const seen=new Set();
-  (items||[]).forEach(x=>{if(x?.id&&!seen.has(x.id)){seen.add(x.id);unique.push(x)}});
-  state.forumPublic=unique;window.__scForumPublicCache=unique;
+  state.forumPublic=forumMerge(items||[],state.forumPublic||[]);
+  window.__scForumPublicCache=state.forumPublic;
+  forumSaveLocalCache();
   localStorage.setItem(KEY,JSON.stringify(state));
   if(!document.getElementById('forumView').classList.contains('hidden'))renderForum();
 }
 function applyForumPrivate(items){
-  const unique=[];const seen=new Set();
-  (items||[]).forEach(x=>{if(x?.id&&!seen.has(x.id)){seen.add(x.id);unique.push(x)}});
-  state.forumPrivate=unique;window.__scForumPrivateCache=unique;
+  state.forumPrivate=forumMerge(items||[],state.forumPrivate||[]);
+  window.__scForumPrivateCache=state.forumPrivate;
+  forumSaveLocalCache();
   localStorage.setItem(KEY,JSON.stringify(state));
   if(!document.getElementById('forumView').classList.contains('hidden'))renderForum();
 }
-function applyReplies(threadId,items){state.communityReplies[threadId]=items||[];localStorage.setItem(KEY,JSON.stringify(state));if(forumRoute==='thread:'+threadId)renderForum()}
+function applyReplies(threadId,items){
+  state.communityReplies=state.communityReplies||{};
+  const old=state.communityReplies[threadId]||[];
+  const map=new Map();
+  old.forEach(x=>{if(x?.id)map.set(x.id,x)});
+  (items||[]).forEach(x=>{if(x?.id)map.set(x.id,{...(map.get(x.id)||{}),...x})});
+  state.communityReplies[threadId]=[...map.values()].sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
+  localStorage.setItem(KEY,JSON.stringify(state));
+  if(forumRoute==='thread:'+threadId)renderForum();
+}
 window.applyForumPublic=applyForumPublic;window.applyForumPrivate=applyForumPrivate;window.applyReplies=applyReplies;
 function renderSpoilers(){const box=document.getElementById('spoilersGrid');if(!box)return;document.getElementById('spoilerAddBtn')?.classList.toggle('hidden',!isStaff());document.getElementById('spoilerCount').textContent=`${state.spoilers.length} spoiler`;box.innerHTML=state.spoilers.length?state.spoilers.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).map(x=>`<article class="card spoiler-card"><div class="spoiler-cover" onclick="openSpoiler('${x.id}')"><img src="${esc(x.image||'')}" alt="${esc(x.title)}" onerror="this.style.display='none'"></div><div class="spoiler-content"><div class="role">${x.chatOpen?'💬 Chat aperta':'🔒 Chat chiusa'}</div><h3>${esc(x.title)}</h3><p class="muted">${esc(x.description||'')}</p><div class="toolbar"><button class="btn small primary" onclick="openSpoiler('${x.id}')">Apri spoiler</button>${isStaff()?`<button class="btn small" onclick="openSpoilerEditor('${x.id}')">Modifica</button><button class="btn small danger" onclick="deleteSpoiler('${x.id}')">Elimina</button>`:''}</div></div></article>`).join(''):'<div class="empty">Nessuno spoiler pubblicato.</div>'}
 function openSpoilerEditor(id=''){const x=id?state.spoilers.find(s=>s.id===id):null;if(!isStaff())return;openGeneric(x?'Modifica spoiler':'Pubblica spoiler',`<div class="field"><label>Titolo</label><input id="spTitle" class="input" value="${esc(x?.title||'')}"></div><div class="field"><label>Descrizione</label><textarea id="spDesc" class="input">${esc(x?.description||'')}</textarea></div><div class="field"><label>URL immagine</label><input id="spImage" class="input" value="${esc(x?.image||'')}" placeholder="https://..."></div><div class="top"><span>Chat dello spoiler attiva</span><button id="spChatSwitch" class="switch ${x?.chatOpen!==false?'on':''}" onclick="this.classList.toggle('on')"></button></div><button class="btn primary" style="margin-top:16px" onclick="saveSpoiler('${id}')">${x?'Salva modifiche':'Pubblica'}</button>`)}
@@ -1296,30 +1569,44 @@ window.firebaseBridge={login,logout,saveState,reload};
 async function createThread(data){
   const fbUser=await ensureAnonymous();
   if(!fbUser?.uid)throw new Error('auth/no-user');
-  const payload={
-    ...data,
-    authorUid:fbUser.uid,
-    votes:[],
-    createdAt:new Date().toISOString(),
-    updatedAt:new Date().toISOString()
-  };
+  const createdAt=new Date().toISOString();
+  const payload={...data,authorUid:fbUser.uid,votes:[],createdAt,updatedAt:createdAt};
   const ref=await addDoc(collection(db,'communityThreads'),payload);
   const full={id:ref.id,...payload};
-  // Inserimento immediato locale: la discussione non può "sparire" mentre Firestore ricarica.
+
   if(full.visibility==='public'){
-    window.applyForumPublic?.([full,...((window.__scForumPublicCache)||[])]);
+    state.forumPublic=forumMerge([full],state.forumPublic||[]);
+    window.__scForumPublicCache=state.forumPublic;
   }else{
-    window.applyForumPrivate?.([full,...((window.__scForumPrivateCache)||[])]);
+    state.forumPrivate=forumMerge([full],state.forumPrivate||[]);
+    window.__scForumPrivateCache=state.forumPrivate;
   }
-  await refreshReplies(ref.id);
-  // Refresh asincrono successivo, senza bloccare l'apertura della chat.
-  setTimeout(()=>refreshCommunityData(!!currentProfile),250);
+  forumSaveLocalCache();
+  localStorage.setItem(KEY,JSON.stringify(state));
+
+  state.communityReplies=state.communityReplies||{};
+  state.communityReplies[ref.id]=state.communityReplies[ref.id]||[];
+
+  setTimeout(()=>refreshCommunityData(!!currentProfile),350);
   return full;
 }
 async function updateThread(id,patch){await updateDoc(doc(db,'communityThreads',id),{...patch,updatedAt:new Date().toISOString()});await refreshCommunityData(!!currentProfile)}
-async function deleteThread(id){await deleteDoc(doc(db,'communityThreads',id));await refreshCommunityData(!!currentProfile)}
+async function deleteThread(id){await deleteDoc(doc(db,'communityThreads',id));forumRemoveLocalThread(id);await refreshCommunityData(!!currentProfile)}
 async function toggleVote(id){await ensureAnonymous();const ref=doc(db,'communityThreads',id),snap=await getDoc(ref);if(!snap.exists())return;const votes=snap.data().votes||[],me=auth.currentUser.uid;await updateDoc(ref,{votes:votes.includes(me)?arrayRemove(me):arrayUnion(me),updatedAt:new Date().toISOString()});await refreshPublicThreads()}
-async function addReply(tid,data){await ensureAnonymous();const ref=await addDoc(collection(db,'communityThreads',tid,'replies'),{...data,authorUid:auth.currentUser.uid,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});await refreshReplies(tid);return ref}
+async function addReply(tid,data){
+  await ensureAnonymous();
+  const createdAt=new Date().toISOString();
+  const payload={...data,authorUid:auth.currentUser.uid,createdAt,updatedAt:createdAt};
+  const ref=await addDoc(collection(db,'communityThreads',tid,'replies'),payload);
+  state.communityReplies=state.communityReplies||{};
+  state.communityReplies[tid]=state.communityReplies[tid]||[];
+  const map=new Map((state.communityReplies[tid]||[]).filter(x=>x?.id).map(x=>[x.id,x]));
+  map.set(ref.id,{id:ref.id,...payload});
+  state.communityReplies[tid]=[...map.values()].sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
+  localStorage.setItem(KEY,JSON.stringify(state));
+  setTimeout(()=>refreshReplies(tid),200);
+  return ref;
+}
 async function updateReply(tid,rid,patch){await updateDoc(doc(db,'communityThreads',tid,'replies',rid),{...patch,updatedAt:new Date().toISOString()});await refreshReplies(tid)}
 async function deleteReply(tid,rid){await deleteDoc(doc(db,'communityThreads',tid,'replies',rid));await refreshReplies(tid)}
 async function saveSpoiler(id,data){
