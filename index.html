@@ -120,7 +120,7 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
   padding:4px 7px;border-radius:6px;border:1px solid rgba(77,214,255,.22);
   background:rgba(6,16,28,.82);backdrop-filter:blur(8px)
 }
-.team-admin-badge.docente{
+.team-admin-badge.Studente{
   color:#efe5ff;border-color:rgba(170,140,255,.28);
   background:rgba(85,62,150,.20)
 }
@@ -788,8 +788,8 @@ function skinUrl(name){return 'https://mc-heads.net/body/'+encodeURIComponent(na
 function memberCard(m,actions=false){
   const isDirection=['Owner','Amministratore'].includes(m.role);
   const isTeacher=['Doppiatore','Attore','Doppiatore/Attore','Aiutante Rec'].includes(m.role);
-  const badgeLabel=isDirection?'GESTORE':(isTeacher?'DOCENTE':'');
-  const badgeClass=isTeacher?' docente':'';
+  const badgeLabel=isDirection?'GESTORE':(isTeacher?'STUDENTE':'');
+  const badgeClass=isTeacher?' studente':'';
   const managementBadge=badgeLabel?`<span class="team-admin-badge${badgeClass}">${badgeLabel}</span>`:'';
   return `<div class="card participant team-badge-card ${actions?'team-admin-card':''}">
     ${managementBadge}
@@ -813,8 +813,8 @@ function renderTeamPage(){
   const canManage=!!user&&teamManageMode;
   if(bar){
     bar.innerHTML=canManage
-      ? `<div class="team-management-bar"><div><div class="eyebrow">Area amministrativa</div><h3>Gestione Team</h3><p>Questa modalità è visibile perché hai aperto Team dal tuo profilo Staff. Puoi aggiungere, modificare o eliminare i membri. La Direzione è indicata come Gestore; Doppiatori, Attori, Doppiatori/Attori e Aiutanti registrazione come Docente.</p></div><div class="team-management-actions"><button class="btn primary" onclick="openParticipantModal()">+ Aggiungi membro</button><button class="btn" onclick="showTeam()">Anteprima pubblica</button></div></div>`
-      : `<div class="team-view-mode-note">Visualizzazione pubblica del Team Schoolcraft. I badge Docente e Gestore restano visibili a tutti; i controlli di modifica sono riservati allo Staff.</div>`;
+      ? `<div class="team-management-bar"><div><div class="eyebrow">Area amministrativa</div><h3>Gestione Team</h3><p>Questa modalità è visibile perché hai aperto Team dal tuo profilo Staff. Puoi aggiungere, modificare o eliminare i membri. La Direzione è indicata come Gestore; Doppiatori, Attori, Doppiatori/Attori e Aiutanti registrazione come Studente.</p></div><div class="team-management-actions"><button class="btn primary" onclick="openParticipantModal()">+ Aggiungi membro</button><button class="btn" onclick="showTeam()">Anteprima pubblica</button></div></div>`
+      : `<div class="team-view-mode-note">Visualizzazione pubblica del Team Schoolcraft. I badge Studente e Gestore restano visibili a tutti; i controlli di modifica sono riservati allo Staff.</div>`;
   }
   const groups=[
     ['Direzione — Owner & Amministratori',['Owner','Amministratore']],
