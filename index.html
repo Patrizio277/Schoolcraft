@@ -664,6 +664,19 @@ window.onFirebaseStaffSession=function(valid,profile=null){
 }
 function uid(p='x'){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function scSafeMediaUrl(value=''){
+  const v=String(value||'').trim();
+  if(!v)return '';
+  // Evita richieste 404 per vecchi nomi file locali salvati nel portale.
+  if(/^(https?:\/\/|data:image\/|blob:)/i.test(v))return v;
+  // Consenti solo percorsi relativi espliciti presenti nel repository (./, ../, /).
+  if(/^(\.\.?\/|\/)/.test(v))return v;
+  return '';
+}
+function scMediaImg(url, attrs=''){
+  const safe=scSafeMediaUrl(url);
+  return safe?`<img src="${esc(safe)}" ${attrs}>`:'';
+}
 function fmtDate(v,withTime=true){if(!v)return'—';const d=new Date(v);return new Intl.DateTimeFormat('it-IT',withTime?{dateStyle:'medium',timeStyle:'short'}:{dateStyle:'medium'}).format(d)}
 function fmtLocalDate(v){if(!v)return'—';const [y,m,d]=String(v).slice(0,10).split('-');return new Intl.DateTimeFormat('it-IT',{dateStyle:'medium'}).format(new Date(+y,+m-1,+d))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(window.__tt);window.__tt=setTimeout(()=>t.classList.add('hidden'),2400)}
@@ -950,7 +963,7 @@ function renderHeroStatus(){
 }
 function updateCountdown(date){const box=document.getElementById('countdown');if(!box)return;const ms=Math.max(0,new Date(date)-new Date()),d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1000);box.innerHTML=[['Giorni',d],['Ore',h],['Min',m],['Sec',s]].map(x=>`<div class="countbox"><strong>${x[1]}</strong><span>${x[0]}</span></div>`).join('')}
 setInterval(()=>{const e=futureEvents()[0];if(e)updateCountdown(e.date)},1000)
-function renderRegistration(){const e=futureEvents()[0],box=document.getElementById('publicRegistration');if(!e){box.innerHTML='<div class="empty">Nessuna registrazione o attività programmata.</div>';return}box.innerHTML=`<div class="card registration-card"><div><div class="role">${esc(e.category)}</div><h3 style="font-size:1.65rem">${esc(e.title)}</h3><p>${esc(e.description||'Attività programmata dallo staff.')}</p><div class="tag">${fmtDate(e.date)}</div><div class="countdown" id="countdown"></div></div><div class="registration-media">${e.image?`<img src="${esc(e.image)}" onerror="this.parentElement.innerHTML='<div class=empty>Immagine non disponibile</div>'" alt="${esc(e.title)}">`:'<div class="empty" style="margin:22px">Nessuna immagine associata</div>'}</div></div>`;updateCountdown(e.date)}
+function renderRegistration(){const e=futureEvents()[0],box=document.getElementById('publicRegistration');if(!e){box.innerHTML='<div class="empty">Nessuna registrazione o attività programmata.</div>';return}box.innerHTML=`<div class="card registration-card"><div><div class="role">${esc(e.category)}</div><h3 style="font-size:1.65rem">${esc(e.title)}</h3><p>${esc(e.description||'Attività programmata dallo staff.')}</p><div class="tag">${fmtDate(e.date)}</div><div class="countdown" id="countdown"></div></div><div class="registration-media">${e.image?`<img src="${esc(scSafeMediaUrl(e.image))}" onerror="this.parentElement.innerHTML='<div class=empty>Immagine non disponibile</div>'" alt="${esc(e.title)}">`:'<div class="empty" style="margin:22px">Nessuna immagine associata</div>'}</div></div>`;updateCountdown(e.date)}
 function renderChanges(){
   const a=(state.changes||[]).filter(c=>c.published!==false).slice(0,10),box=document.getElementById('publicChanges');
   if(!box)return;
@@ -974,7 +987,7 @@ function openPublicChangeModal(id){
   const box=document.getElementById('publicChangeModalContent');
   box.innerHTML=`
     <div class="change-viewer-cover">
-      ${c.image?`<img src="${esc(c.image)}" alt="${esc(c.title)}" onerror="this.outerHTML='<div class=change-viewer-placeholder>Immagine non disponibile</div>'">`:`<div class="change-viewer-placeholder">Schoolcraft · Comunicazione ufficiale</div>`}
+      ${c.image?`<img src="${esc(scSafeMediaUrl(c.image))}" alt="${esc(c.title)}" onerror="this.outerHTML='<div class=change-viewer-placeholder>Immagine non disponibile</div>'">`:`<div class="change-viewer-placeholder">Schoolcraft · Comunicazione ufficiale</div>`}
     </div>
     <div class="change-viewer-body">
       <div class="modal-head">
@@ -998,10 +1011,10 @@ function calendarHTML(base,mode){const y=base.getFullYear(),m=base.getMonth(),fi
 function renderCalendars(){document.getElementById('publicMonthLabel').textContent=publicMonth.toLocaleDateString('it-IT',{month:'long',year:'numeric'});document.getElementById('dashMonthLabel').textContent=dashMonth.toLocaleDateString('it-IT',{month:'long',year:'numeric'});document.getElementById('publicCalendar').innerHTML=calendarHTML(publicMonth,'public');document.getElementById('dashCalendar').innerHTML=calendarHTML(dashMonth,'dash')}
 function publicShiftMonth(n){publicMonth.setMonth(publicMonth.getMonth()+n);renderCalendars()}function dashShiftMonth(n){dashMonth.setMonth(dashMonth.getMonth()+n);renderCalendars()}
 function openPublicDay(iso){const ev=state.events.filter(e=>eventDate(e)===iso).sort((a,b)=>new Date(a.date)-new Date(b.date));openGeneric('Attività del '+fmtLocalDate(iso),ev.length?ev.map(e=>`<div class="card" style="margin-bottom:10px"><div class="role">${esc(e.category)}</div><h3>${esc(e.title)}</h3><div class="muted">${fmtDate(e.date)}</div><p>${esc(e.description||'')}</p><button class="btn small" onclick="showEventPublic('${e.id}')">Dettagli</button></div>`).join(''):'<div class="empty">Nessuna attività in questo giorno.</div>')}
-function showEventPublic(id){const e=state.events.find(x=>x.id===id);if(!e)return;openGeneric('Dettagli evento',`<div class="role">${esc(e.category)}</div><h3>${esc(e.title)}</h3><p>${fmtDate(e.date)}</p><p>${esc(e.description||'')}</p>${e.image?`<img src="${esc(e.image)}" style="width:100%;max-height:420px;object-fit:contain;border-radius:14px;background:#06101c">`:''}`)}
+function showEventPublic(id){const e=state.events.find(x=>x.id===id);if(!e)return;openGeneric('Dettagli evento',`<div class="role">${esc(e.category)}</div><h3>${esc(e.title)}</h3><p>${fmtDate(e.date)}</p><p>${esc(e.description||'')}</p>${e.image?`<img src="${esc(scSafeMediaUrl(e.image))}" style="width:100%;max-height:420px;object-fit:contain;border-radius:14px;background:#06101c" onerror="this.style.display='none'">`:''}`)}
 
-function renderGallery(){const box=document.getElementById('publicGallery');box.innerHTML=state.gallery.map(g=>`<div class="gallery-card" onclick="openGallery('${g.id}')"><img src="${g.url}" alt="${esc(g.title)}"><span>${esc(g.title)}</span></div>`).join('')}
-function openGallery(id){const g=state.gallery.find(x=>x.id===id);if(!g)return;document.getElementById('lightboxImg').src=g.url;document.getElementById('lightboxCaption').textContent=g.title;document.getElementById('lightbox').classList.remove('hidden')}
+function renderGallery(){const box=document.getElementById('publicGallery');box.innerHTML=state.gallery.map(g=>`<div class="gallery-card" onclick="openGallery('${g.id}')">${scSafeMediaUrl(g.url)?`<img src="${esc(scSafeMediaUrl(g.url))}" alt="${esc(g.title)}" onerror="this.style.display='none'">`:`<div class="empty">Immagine non disponibile</div>`}<span>${esc(g.title)}</span></div>`).join('')}
+function openGallery(id){const g=state.gallery.find(x=>x.id===id);if(!g)return;const safe=scSafeMediaUrl(g.url);if(!safe){toast('Immagine non disponibile');return}document.getElementById('lightboxImg').src=safe;document.getElementById('lightboxCaption').textContent=g.title;document.getElementById('lightbox').classList.remove('hidden')}
 function skinUrl(name){return 'https://mc-heads.net/body/'+encodeURIComponent(name||'Steve')+'/256'}
 function memberCard(m,actions=false){
   const isDirection=['Owner','Amministratore'].includes(m.role);
@@ -1100,7 +1113,7 @@ function openChangeModal(id=''){
       <label>Immagine facoltativa — URL</label>
       <input id="cImage" class="input" value="${esc(c?.image||'')}" placeholder="https://...">
     </div>
-    ${c?.image?`<img src="${esc(c.image)}" style="width:100%;max-height:250px;object-fit:cover;border-radius:12px;border:1px solid var(--line);margin-bottom:14px" onerror="this.style.display='none'">`:''}
+    ${c?.image?`<img src="${esc(scSafeMediaUrl(c.image))}" style="width:100%;max-height:250px;object-fit:cover;border-radius:12px;border:1px solid var(--line);margin-bottom:14px" onerror="this.style.display='none'">`:''}
     <button class="btn primary" style="width:100%" onclick="saveChange('${id}')">${c?'Salva modifiche':'Pubblica comunicazione'}</button>
   `);
 }
@@ -1168,7 +1181,7 @@ function renderChangesManager(){
               <strong>${esc(c.title)}</strong>
               <div class="change-desc-preview" title="${esc(c.text||'')}">${esc(c.text||'')}</div>
             </td>
-            <td>${c.image?`<img class="change-image-thumb" src="${esc(c.image)}" onerror="this.style.display='none'">`:'<span class="muted">—</span>'}</td>
+            <td>${c.image?`<img class="change-image-thumb" src="${esc(scSafeMediaUrl(c.image))}" onerror="this.style.display='none'">`:'<span class="muted">—</span>'}</td>
             <td>${c.published===false?'<span class="status pending">Bozza</span>':'<span class="status present change-publish-state">Pubblicata</span>'}</td>
             <td>${esc(c.author||'Staff')}</td>
             <td>
@@ -1188,12 +1201,12 @@ function openChangePreview(id){
   openGeneric(c.title,`
     <div class="role">${fmtLocalDate(c.date)} · ${c.published===false?'BOZZA':'PUBBLICATA'}</div>
     <p style="white-space:pre-wrap;line-height:1.75">${esc(c.text||'')}</p>
-    ${c.image?`<img src="${esc(c.image)}" style="width:100%;max-height:420px;object-fit:cover;border-radius:12px;border:1px solid var(--line)" onerror="this.style.display='none'">`:''}
+    ${c.image?`<img src="${esc(scSafeMediaUrl(c.image))}" style="width:100%;max-height:420px;object-fit:cover;border-radius:12px;border:1px solid var(--line)" onerror="this.style.display='none'">`:''}
     <div class="muted" style="margin-top:12px">Autore: ${esc(c.author||'Staff')}</div>
   `);
 }
 
-function renderReminders(){const box=document.getElementById('remindersList');box.innerHTML=state.reminders.length?state.reminders.map(r=>`<details class="reminder"><summary><div><div class="role">${r.status==='done'?'Completato':'Ancora da fare'}</div><strong>${esc(r.title)}</strong></div><span class="tag">Apri</span></summary><div class="reminder-body"><p>${esc(r.text||'')}</p>${r.image?`<img src="${esc(r.image)}" alt="">`:''}<div class="toolbar" style="margin-top:14px"><button class="btn small ${r.status==='done'?'':'success'}" onclick="toggleReminder('${r.id}')">${r.status==='done'?'Segna da fare':'Segna completato'}</button><button class="btn small danger" onclick="deleteReminder('${r.id}')">Elimina</button></div></div></details>`).join(''):'<div class="empty">Nessun promemoria.</div>'}
+function renderReminders(){const box=document.getElementById('remindersList');box.innerHTML=state.reminders.length?state.reminders.map(r=>`<details class="reminder"><summary><div><div class="role">${r.status==='done'?'Completato':'Ancora da fare'}</div><strong>${esc(r.title)}</strong></div><span class="tag">Apri</span></summary><div class="reminder-body"><p>${esc(r.text||'')}</p>${r.image?`<img src="${esc(scSafeMediaUrl(r.image))}" alt="" onerror="this.style.display='none'">`:''}<div class="toolbar" style="margin-top:14px"><button class="btn small ${r.status==='done'?'':'success'}" onclick="toggleReminder('${r.id}')">${r.status==='done'?'Segna da fare':'Segna completato'}</button><button class="btn small danger" onclick="deleteReminder('${r.id}')">Elimina</button></div></div></details>`).join(''):'<div class="empty">Nessun promemoria.</div>'}
 function openReminderModal(){openGeneric('Nuovo promemoria',`<div class="field"><label>Titolo</label><input id="rTitle" class="input"></div><div class="field"><label>Descrizione</label><textarea id="rText" class="input"></textarea></div><div class="field"><label>URL immagine facoltativa</label><input id="rImage" class="input"></div><button class="btn primary" onclick="saveReminder()">Salva</button>`)}
 function saveReminder(){const t=document.getElementById('rTitle').value.trim();if(!t)return toast('Inserisci un titolo');state.reminders.unshift({id:uid('r'),title:t,text:document.getElementById('rText').value.trim(),image:document.getElementById('rImage').value.trim(),status:'todo',date:new Date().toISOString()});closeModal('genericModal');saveData('Promemoria aggiunto')}
 function toggleReminder(id){const r=state.reminders.find(x=>x.id===id);r.status=r.status==='done'?'todo':'done';saveData('Promemoria aggiornato')}
@@ -1831,7 +1844,7 @@ function applyReplies(threadId,items){
   if(forumRoute==='thread:'+threadId)renderForum();
 }
 window.applyForumPublic=applyForumPublic;window.applyForumPrivate=applyForumPrivate;window.applyReplies=applyReplies;
-function renderSpoilers(){const box=document.getElementById('spoilersGrid');if(!box)return;document.getElementById('spoilerAddBtn')?.classList.toggle('hidden',!isStaff());document.getElementById('spoilerCount').textContent=`${state.spoilers.length} spoiler`;box.innerHTML=state.spoilers.length?state.spoilers.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).map(x=>`<article class="card spoiler-card"><div class="spoiler-cover" onclick="openSpoiler('${x.id}')"><img src="${esc(x.image||'')}" alt="${esc(x.title)}" onerror="this.style.display='none'"></div><div class="spoiler-content"><div class="role">${x.chatOpen?'💬 Chat aperta':'🔒 Chat chiusa'}</div><h3>${esc(x.title)}</h3><p class="muted">${esc(x.description||'')}</p><div class="toolbar"><button class="btn small primary" onclick="openSpoiler('${x.id}')">Apri spoiler</button>${isStaff()?`<button class="btn small" onclick="openSpoilerEditor('${x.id}')">Modifica</button><button class="btn small danger" onclick="deleteSpoiler('${x.id}')">Elimina</button>`:''}</div></div></article>`).join(''):'<div class="empty">Nessuno spoiler pubblicato.</div>'}
+function renderSpoilers(){const box=document.getElementById('spoilersGrid');if(!box)return;document.getElementById('spoilerAddBtn')?.classList.toggle('hidden',!isStaff());document.getElementById('spoilerCount').textContent=`${state.spoilers.length} spoiler`;box.innerHTML=state.spoilers.length?state.spoilers.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).map(x=>`<article class="card spoiler-card"><div class="spoiler-cover" onclick="openSpoiler('${x.id}')">${scSafeMediaUrl(x.image)?`<img src="${esc(scSafeMediaUrl(x.image))}" alt="${esc(x.title)}" onerror="this.style.display='none'">`:`<div class="empty">Immagine non disponibile</div>`}</div><div class="spoiler-content"><div class="role">${x.chatOpen?'💬 Chat aperta':'🔒 Chat chiusa'}</div><h3>${esc(x.title)}</h3><p class="muted">${esc(x.description||'')}</p><div class="toolbar"><button class="btn small primary" onclick="openSpoiler('${x.id}')">Apri spoiler</button>${isStaff()?`<button class="btn small" onclick="openSpoilerEditor('${x.id}')">Modifica</button><button class="btn small danger" onclick="deleteSpoiler('${x.id}')">Elimina</button>`:''}</div></div></article>`).join(''):'<div class="empty">Nessuno spoiler pubblicato.</div>'}
 function openSpoilerEditor(id=''){const x=id?state.spoilers.find(s=>s.id===id):null;if(!isStaff())return;openGeneric(x?'Modifica spoiler':'Pubblica spoiler',`<div class="field"><label>Titolo</label><input id="spTitle" class="input" value="${esc(x?.title||'')}"></div><div class="field"><label>Descrizione</label><textarea id="spDesc" class="input">${esc(x?.description||'')}</textarea></div><div class="field"><label>URL immagine</label><input id="spImage" class="input" value="${esc(x?.image||'')}" placeholder="https://..."></div><div class="top"><span>Chat dello spoiler attiva</span><button id="spChatSwitch" class="switch ${x?.chatOpen!==false?'on':''}" onclick="this.classList.toggle('on')"></button></div><button class="btn primary" style="margin-top:16px" onclick="saveSpoiler('${id}')">${x?'Salva modifiche':'Pubblica'}</button>`)}
 async function saveSpoiler(id){const title=document.getElementById('spTitle').value.trim(),description=document.getElementById('spDesc').value.trim(),image=document.getElementById('spImage').value.trim(),chatOpen=document.getElementById('spChatSwitch').classList.contains('on');if(!title||!image)return toast('Inserisci titolo e URL immagine');await window.communityBridge.saveSpoiler(id,{title,description,image,chatOpen});closeModal('genericModal');toast(id?'Spoiler modificato':'Spoiler pubblicato')}
 async function deleteSpoiler(id){if(!confirm('Eliminare questo spoiler e la relativa chat?'))return;await window.communityBridge.deleteSpoiler(id);toast('Spoiler eliminato')}
@@ -1847,7 +1860,7 @@ function openSpoiler(id){
     : canWrite
       ? `<textarea id="spoilerMsg" class="input" placeholder="Scrivi un commento..."></textarea><button class="btn primary" style="margin-top:8px;width:100%" onclick="sendSpoilerComment('${x.id}')">Invia commento</button>`
       : `<div class="community-login-note"><strong>Partecipa alla discussione.</strong><br><span class="muted">Accedi con il tuo account Team Schoolcraft. Lo stesso accesso vale anche per Forum e Sneak-Peak.</span><button class="btn primary" style="margin-top:12px;width:100%" onclick="openLogin()">👤 Accedi al Team</button></div>`;
-  wrap.innerHTML=`<div class="breadcrumbs"><button onclick="restoreSpoilerGrid()">Spoiler</button><span>›</span><strong>${esc(x.title)}</strong></div><div class="spoiler-detail"><div class="card"><img class="spoiler-main-image" src="${esc(x.image)}"><div class="role" style="margin-top:16px">Anteprima ufficiale</div><h2>${esc(x.title)}</h2><p style="white-space:pre-wrap;line-height:1.7">${esc(x.description||'')}</p>${isStaff()?`<div class="toolbar"><button class="btn" onclick="openSpoilerEditor('${x.id}')">Modifica spoiler</button><button class="btn ${x.chatOpen?'danger':'success'}" onclick="toggleSpoilerChat('${x.id}',${!x.chatOpen})">${x.chatOpen?'Blocca chat':'Avvia chat'}</button></div>`:''}</div><div class="chatbox"><div class="chathead"><div><strong>Discussione spoiler</strong><div class="muted" style="font-size:.7rem">${x.chatOpen?'Chat aperta alla community':'Chat bloccata dallo staff'}</div></div><span class="status ${x.chatOpen?'present':'absent'}">${x.chatOpen?'APERTA':'CHIUSA'}</span></div><div id="spoilerComments" class="chatmessages"></div><div class="chatcomposer">${composer}</div></div></div>`;
+  wrap.innerHTML=`<div class="breadcrumbs"><button onclick="restoreSpoilerGrid()">Spoiler</button><span>›</span><strong>${esc(x.title)}</strong></div><div class="spoiler-detail"><div class="card">${scSafeMediaUrl(x.image)?`<img class="spoiler-main-image" src="${esc(scSafeMediaUrl(x.image))}" onerror="this.style.display='none'">`:`<div class="empty">Immagine non disponibile</div>`}<div class="role" style="margin-top:16px">Anteprima ufficiale</div><h2>${esc(x.title)}</h2><p style="white-space:pre-wrap;line-height:1.7">${esc(x.description||'')}</p>${isStaff()?`<div class="toolbar"><button class="btn" onclick="openSpoilerEditor('${x.id}')">Modifica spoiler</button><button class="btn ${x.chatOpen?'danger':'success'}" onclick="toggleSpoilerChat('${x.id}',${!x.chatOpen})">${x.chatOpen?'Blocca chat':'Avvia chat'}</button></div>`:''}</div><div class="chatbox"><div class="chathead"><div><strong>Discussione spoiler</strong><div class="muted" style="font-size:.7rem">${x.chatOpen?'Chat aperta alla community':'Chat bloccata dallo staff'}</div></div><span class="status ${x.chatOpen?'present':'absent'}">${x.chatOpen?'APERTA':'CHIUSA'}</span></div><div id="spoilerComments" class="chatmessages"></div><div class="chatcomposer">${composer}</div></div></div>`;
   renderSpoilerComments(id);
 }
 function restoreSpoilerGrid(){const sec=document.querySelector('#spoilersView section:last-child');sec.innerHTML=`<div class="wrap"><div class="forum-toolbar"><div><span class="tag" id="spoilerCount">0 spoiler</span></div><button id="spoilerAddBtn" class="btn primary hidden" onclick="openSpoilerEditor()">+ Pubblica spoiler</button></div><div id="spoilersGrid" class="spoiler-grid"></div></div>`;renderSpoilers()}
@@ -1878,13 +1891,26 @@ let scAudioState=(()=>{
   }catch(e){return {enabled:true,volume:0.35}}
 })();
 let scAudioCtx=null;
+let scAudioUnlocked=false;
 
-function scGetAudioCtx(){
-  if(!scAudioCtx){
-    const Ctx=window.AudioContext||window.webkitAudioContext;
-    if(Ctx) scAudioCtx=new Ctx();
+async function scUnlockAudio(){
+  if(scAudioUnlocked)return scAudioCtx;
+  const Ctx=window.AudioContext||window.webkitAudioContext;
+  if(!Ctx)return null;
+  try{
+    if(!scAudioCtx)scAudioCtx=new Ctx();
+    if(scAudioCtx.state==='suspended')await scAudioCtx.resume();
+    scAudioUnlocked=scAudioCtx.state==='running';
+  }catch(e){
+    scAudioUnlocked=false;
   }
-  if(scAudioCtx&&scAudioCtx.state==='suspended') scAudioCtx.resume().catch(()=>{});
+  return scAudioCtx;
+}
+['pointerdown','keydown','touchstart'].forEach(evt=>{
+  window.addEventListener(evt,()=>{scUnlockAudio().catch(()=>{})},{once:true,passive:true});
+});
+function scGetAudioCtx(){
+  if(!scAudioUnlocked||!scAudioCtx||scAudioCtx.state!=='running')return null;
   return scAudioCtx;
 }
 function scTone({freq=440,duration=.09,type='sine',gain=.08,attack=.005,release=.08,delay=0}={}){
