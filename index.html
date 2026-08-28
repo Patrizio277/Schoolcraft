@@ -901,8 +901,14 @@ async function login(){
     const code=String(e?.code||e?.message||'');
     if(code.includes('invalid-credential')||code.includes('wrong-password')||code.includes('user-not-found')||code.includes('invalid-email')){
       err.textContent='Nome utente/e-mail o password non corretti.';
+    }else if(code.includes('permission-denied')){
+      err.textContent='Firebase Authentication OK, ma Firestore sta bloccando la lettura del profilo (permission-denied). Controlla/pubblica le regole Firestore.';
+    }else if(code.includes('team-profile-not-found')){
+      err.textContent='Login Firebase OK, ma non esiste team_accounts/' + (e?.uid||'UID') + '. Il nome del documento Firestore deve essere identico allo User UID di Authentication.';
+    }else if(code.includes('team-profile-inactive')){
+      err.textContent='Il profilo Team esiste, ma active non risulta boolean true in Firestore.';
     }else if(code.includes('account-not-authorized')||code.includes('Account non autorizzato')){
-      err.textContent='Account Firebase valido, ma non autorizzato nel Team Schoolcraft.';
+      err.textContent='Il profilo Team è stato trovato, ma i campi di autorizzazione non sono validi. Usa permission: member (minuscolo) e active: true.';
     }else if(code.includes('network')){
       err.textContent='Problema di connessione a Firebase. Riprova tra qualche secondo.';
     }else{
@@ -1986,23 +1992,49 @@ function isAuthorizedProfile(p){
   return ['owner','admin','member','team'].includes(perm) || !!p.role;
 }
 async function profileFor(uid){
+  // V8.4.5: non nascondere più gli errori Firestore. In precedenza un permission-denied
+  // veniva trasformato in null e mostrato come generico "account non autorizzato".
   try{
-    // Nuova struttura V8.1: tutti gli account, Staff compreso, possono vivere in team_accounts.
-    const teamSnap=await getDoc(doc(db,'team_accounts',uid));
+    const teamRef=doc(db,'team_accounts',uid);
+    const teamSnap=await getDoc(teamRef);
     if(teamSnap.exists()){
-      const p={uid,...teamSnap.data()};
-      try{const o=JSON.parse(localStorage.getItem('schoolcraft_profile_override_'+uid)||'null');if(o)Object.assign(p,o)}catch(e){}
+      const data=teamSnap.data()||{};
+      const p={uid,...data};
+      // Le preferenze locali possono modificare SOLO i campi estetici del profilo.
+      // Non devono mai sovrascrivere active/permission/role/username provenienti da Firestore.
+      try{
+        const o=JSON.parse(localStorage.getItem('schoolcraft_profile_override_'+uid)||'null');
+        if(o){
+          if(typeof o.displayName==='string')p.displayName=o.displayName;
+          if(typeof o.minecraft==='string')p.minecraft=o.minecraft;
+        }
+      }catch(e){}
+      p.__profileSource='team_accounts';
       return p;
     }
-    // Compatibilità con i tre account Staff già esistenti.
-    const legacy=await getDoc(doc(db,'staff',uid));
-    if(!legacy.exists())return null;
-    const p={uid,...legacy.data()};
-    try{const o=JSON.parse(localStorage.getItem('schoolcraft_profile_override_'+uid)||'null');if(o)Object.assign(p,o)}catch(e){}
+
+    // Compatibilità con i vecchi account Staff.
+    const legacyRef=doc(db,'staff',uid);
+    const legacy=await getDoc(legacyRef);
+    if(!legacy.exists()){
+      const err=new Error('team-profile-not-found');
+      err.code='team-profile-not-found';
+      err.uid=uid;
+      throw err;
+    }
+    const p={uid,...legacy.data(),__profileSource:'staff'};
+    try{
+      const o=JSON.parse(localStorage.getItem('schoolcraft_profile_override_'+uid)||'null');
+      if(o){
+        if(typeof o.displayName==='string')p.displayName=o.displayName;
+        if(typeof o.minecraft==='string')p.minecraft=o.minecraft;
+      }
+    }catch(e){}
     return p;
   }catch(e){
-    console.error('Profile lookup',e);
-    return null;
+    console.error('Profile lookup failed', {uid, code:e?.code, message:e?.message, error:e});
+    if(!e.uid)e.uid=uid;
+    throw e;
   }
 }
 async function ensureAnonymous(){
@@ -2123,8 +2155,12 @@ async function login(email,password,remember=true){
   const cred=await signInWithEmailAndPassword(auth,email,password);
   const profile=await profileFor(cred.user.uid);
   if(!isAuthorizedProfile(profile)){
+    const err=new Error(profile?.active!==true ? 'team-profile-inactive' : 'account-not-authorized');
+    err.code=profile?.active!==true ? 'team-profile-inactive' : 'account-not-authorized';
+    err.uid=cred.user.uid;
+    err.profile=profile||null;
     await signOut(auth);
-    throw new Error('account-not-authorized');
+    throw err;
   }
   currentProfile=profile;
   window.communityUid=cred.user.uid;
@@ -2331,7 +2367,7 @@ init();
 
 
 <!-- =========================================================
-     SCHOOLCRAFT TEAM PORTAL V8.4.4 — RIGHT ACCOUNT & APPELLO ACCOUNTS
+     SCHOOLCRAFT TEAM PORTAL V8.4.5 — RIGHT ACCOUNT & APPELLO ACCOUNTS
      UI private-by-default, role-aware navigation, team settings.
 ========================================================== -->
 <style id="schoolcraft-team-portal-v81">
