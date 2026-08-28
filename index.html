@@ -392,7 +392,7 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
 
 <section><div class="wrap"><div class="cta"><div class="eyebrow">Area riservata</div><h3>Fai parte dello staff?</h3><p>Accedi con le credenziali autorizzate per gestire appelli, calendario, archivio, comunicazioni e regolamento.</p><button class="btn primary" onclick="openLogin()">Accedi allo staff</button></div></div></section>
 </main>
-<footer class="footer"><div class="wrap">Schoolcraft Roleplay 2 · Community & Production Hub v7.16 · Firebase Cloud</div></footer>
+<footer class="footer"><div class="wrap">Schoolcraft Roleplay 2 · Team Operations Portal V8.1 · Firebase Cloud</div></footer>
 </div>
 
 <div id="teamView" class="hidden">
@@ -457,7 +457,15 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
 </div>
 </div>
 
-<div id="loginModal" class="modal hidden"><div class="modal-card"><div class="modal-head"><div><div class="eyebrow">Area riservata</div><h2>Accesso Staff</h2></div><button class="iconbtn" onclick="closeModal('loginModal')">×</button></div><div class="field"><label>Nome</label><input id="loginName" class="input" autocomplete="username" placeholder="Nome utente"></div><div class="field"><label>Password</label><div class="password-wrap"><input id="loginPassword" class="input" type="password" autocomplete="current-password" placeholder="Password"><button class="eye-btn" type="button" title="Mostra/nascondi password" onclick="togglePassword()">◉</button></div></div><div id="loginError" style="color:var(--red);font-size:.82rem;margin-bottom:12px"></div><button class="btn primary" style="width:100%" onclick="login()">Entra</button><div class="notice" style="margin-top:16px">Accesso Staff protetto da Firebase Authentication. Il Forum usa identità Community anonime Firebase separate dagli account dello staff.</div></div></div>
+<div id="loginModal" class="modal hidden"><div class="modal-card"><div class="modal-head"><div><div class="eyebrow">Schoolcraft · Area riservata</div><h2>Accesso Team Portal</h2></div><button class="iconbtn" onclick="closeModal('loginModal')">×</button></div><div class="field"><label>Nome utente o e-mail</label><input id="loginName" class="input" autocomplete="username" placeholder="Es. Mario oppure mario@schoolcraft.local"></div><div class="field"><label>Password</label><div class="password-wrap"><input id="loginPassword" class="input" type="password" autocomplete="current-password" placeholder="Password"><button class="eye-btn" type="button" title="Mostra/nascondi password" onclick="togglePassword()">◉</button></div></div>
+<div class="sc-login-options">
+  <label class="sc-remember-row">
+    <input id="loginRemember" type="checkbox" checked>
+    <span><strong>Resta collegato</strong><small>Se attivo, Schoolcraft ricorderà l’accesso su questo dispositivo.</small></span>
+  </label>
+</div>
+
+<div id="loginError" style="color:var(--red);font-size:.82rem;margin-bottom:12px"></div><button class="btn primary" style="width:100%" onclick="login()">Entra</button><div class="notice" style="margin-top:16px">Accesso privato protetto da Firebase Authentication. Solo gli account autorizzati del Team Schoolcraft possono entrare.</div></div></div>
 
 <div id="genericModal" class="modal hidden"><div class="modal-card"><div class="modal-head"><h2 id="genericTitle">Modifica</h2><button class="iconbtn" onclick="closeModal('genericModal')">×</button></div><div id="genericBody"></div></div></div>
 <div id="lightbox" class="modal hidden" onclick="if(event.target===this)closeModal('lightbox')"><div style="max-width:1100px;width:100%"><button class="btn" style="float:right;margin-bottom:10px" onclick="closeModal('lightbox')">Chiudi ×</button><img id="lightboxImg" alt="Schoolcraft" style="width:100%;max-height:82vh;object-fit:contain;border-radius:16px;background:#030912"><div id="lightboxCaption" class="muted" style="text-align:center;margin-top:10px"></div></div></div>
@@ -625,25 +633,33 @@ window.onCloudStatus=onCloudStatus;
 function loadSession(){try{return JSON.parse(sessionStorage.getItem(SESSION))}catch(e){return null}}
 function saveSession(){if(user)sessionStorage.setItem(SESSION,JSON.stringify(user));else sessionStorage.removeItem(SESSION)}
 
-window.onFirebaseStaffSession=function(valid,profile=null){
-  window.__firebaseStaffSession=!!valid;
+window.onFirebaseTeamSession=function(valid,profile=null){
+  window.__firebaseTeamSession=!!valid;
+  window.__firebaseStaffSession=!!(valid&&profile&&['owner','admin'].includes(profile.permission));
 
   if(valid&&profile){
-    // Firebase è la fonte di verità dell'account Staff.
     user={
-      name:profile.username||user?.name||'Staff',
-      role:profile.role||user?.role||'Staff',
-      permission:profile.permission,
-      uid:profile.uid
+      name:profile.displayName||profile.username||user?.name||'Team Member',
+      role:profile.role||user?.role||'Team Member',
+      permission:profile.permission||'member',
+      uid:profile.uid,
+      minecraft:profile.minecraft||profile.mc||''
     };
     saveSession();
-  }else if(user&&['owner','admin'].includes(user.permission)){
-    // Evita la situazione "pannello Staff / Firebase anonimo".
+  }else{
     user=null;
     saveSession();
     teamManageMode=false;
   }
-
+  try{renderAccounts()}catch(e){}
+}
+window.onFirebaseStaffSession=function(valid,profile=null){
+  window.__firebaseStaffSession=!!valid;
+  if(valid&&profile)window.onFirebaseTeamSession?.(true,profile);
+  else if(user&&['owner','admin'].includes(user.permission)){
+    // La sessione Team può restare valida per un membro normale; lo Staff invece viene declassato.
+    window.__firebaseStaffSession=false;
+  }
   try{renderAccounts()}catch(e){}
 }
 function uid(p='x'){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
@@ -663,6 +679,33 @@ function showTeam(){
   renderAccounts();
   scrollTo(0,0);
 }
+
+window.scPrepareAttendanceAccounts=function(){
+  if(!isAdmin()){toast('Solo Owner/Admin');return}
+  const members=(state.team||state.participants||state.members||[]).map((m,i)=>{
+    const name=String(m.name||m.username||m.minecraft||`Membro${i+1}`).trim();
+    const mc=String(m.minecraft||m.nick||m.name||'').trim();
+    const username=String(m.username||name).trim().replace(/\s+/g,'');
+    return {name,username,email:`${username.toLowerCase()}@schoolcraft.local`,minecraft:mc,role:m.role||'Team Member',permission:'member',active:true};
+  }).filter(x=>x.name);
+  if(!members.length){toast('Non trovo membri nell’appello');return}
+  const rows=members.map((m,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td>${esc(m.name)}</td>
+      <td><code>${esc(m.email)}</code></td>
+      <td>${esc(m.role)}</td>
+      <td>${esc(m.minecraft||'—')}</td>
+    </tr>`).join('');
+  openGeneric('Account da creare per l’appello',`
+    <div class="notice">Questa lista prepara tutti gli account Team presenti nell’appello. Per sicurezza gli account Firebase Authentication vanno creati da Firebase Console/Admin SDK: il sito non genera password né può creare account privilegiati dal browser.</div>
+    <div style="overflow:auto;max-height:55vh">
+      <table class="table"><thead><tr><th>#</th><th>Nome</th><th>Email login</th><th>Ruolo</th><th>Minecraft</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>
+    <div class="notice">Dopo la creazione Auth, crea <code>team_accounts/{UID}</code> con <code>active:true</code>, <code>permission:"member"</code>, <code>role</code>, <code>username</code>, <code>minecraft</code>. Il membro potrà modificare solo nome visualizzato e skin/nickname Minecraft.</div>
+  `);
+}
+
 function showTeamAdmin(){
   if(!user){openLogin();return}
   teamManageMode=true;
@@ -674,6 +717,132 @@ function showTeamAdmin(){
 }
 function showRulesPage(){hideViews();document.getElementById('rulesView').classList.remove('hidden');renderRulesPage();renderAccounts();scrollTo(0,0)}
 function showSpoilers(){hideViews();document.getElementById('spoilersView').classList.remove('hidden');renderSpoilers();renderAccounts();renderCommunityProfileBar();scrollTo(0,0)}
+
+
+function scSyncSingleTeamLoginUI(){
+  const authed=!!(user&&window.__firebaseTeamSession===true);
+  document.body.classList.toggle('sc-team-authenticated',authed);
+  if(authed)renderCommunityProfileBar?.();
+  if(!authed)return;
+
+  const roots=[
+    document.querySelector('#forumView'),
+    document.querySelector('#communityView'),
+    document.querySelector('[data-view="forum"]'),
+    document.querySelector('.forum-view')
+  ].filter(Boolean);
+
+  roots.forEach(root=>{
+    [...root.querySelectorAll('button,a')].forEach(el=>{
+      const label=(el.textContent||'').trim().toLowerCase();
+      const oc=(el.getAttribute('onclick')||'').toLowerCase();
+      // Only remove the legacy/community login, never the account trigger.
+      if((label==='accedi'||label.includes('accedi al forum')) &&
+         !el.classList.contains('account-trigger') &&
+         (oc.includes('community')||oc.includes('login')||el.classList.contains('community-login-btn')||el.classList.contains('forum-login-btn'))){
+        el.style.display='none';
+        el.dataset.scHiddenLegacyLogin='1';
+      }
+    });
+  });
+}
+
+function scEnsureForumIdentity(){
+  setTimeout(scSyncSingleTeamLoginUI,0);
+  if(!user || window.__firebaseTeamSession!==true)return false;
+  window.communityUid=user.uid||window.communityUid||null;
+  try{
+    localStorage.setItem('schoolcraft_forum_profile_v83',JSON.stringify({
+      nickname:user.name,
+      minecraft:user.minecraft||'',
+      uid:user.uid||''
+    }));
+  }catch(e){}
+  return true;
+}
+
+
+
+window.scSingleLoginObserver=new MutationObserver(()=>{if(user&&window.__firebaseTeamSession===true)scSyncSingleTeamLoginUI()});
+window.scSingleLoginObserver.observe(document.body,{childList:true,subtree:true});
+
+function scFindChatScroll(){
+  const selectors=[
+    '#threadMessages','#forumMessages','.thread-messages','.forum-messages',
+    '.chat-messages','.sc-chat-scroll'
+  ];
+  for(const s of selectors){
+    const el=document.querySelector(s);
+    if(el && el.scrollHeight>el.clientHeight)return el;
+  }
+  // fallback: find the tallest overflow-capable element inside an open forum/thread view
+  const root=document.querySelector('#forumView:not(.hidden),#threadDetail:not(.hidden),#forumThreadDetail:not(.hidden),.thread-detail:not(.hidden)');
+  if(root){
+    const all=[...root.querySelectorAll('div,section')];
+    const candidate=all.filter(el=>el.scrollHeight>el.clientHeight+40).sort((a,b)=>b.scrollHeight-a.scrollHeight)[0];
+    if(candidate)return candidate;
+  }
+  return null;
+}
+function scChatAtBottom(el){
+  if(!el)return true;
+  return (el.scrollHeight-el.scrollTop-el.clientHeight)<48;
+}
+window.scScrollChatBottom=function(smooth=true){
+  const el=scFindChatScroll();
+  if(!el)return;
+  el.scrollTo({top:el.scrollHeight,behavior:smooth&&!document.body.classList.contains('sc-reduced-motion')?'smooth':'auto'});
+}
+window.scScrollChatTop=function(){
+  const el=scFindChatScroll();
+  if(!el)return;
+  el.scrollTo({top:0,behavior:document.body.classList.contains('sc-reduced-motion')?'auto':'smooth'});
+}
+function scEnhanceOpenChat(){
+  setTimeout(()=>{
+    const el=scFindChatScroll();
+    if(!el)return;
+
+    el.classList.add('sc-chat-scroll');
+
+    // Add toolbar once, right above the actual message viewport.
+    if(!el.previousElementSibling?.classList?.contains('sc-chat-toolbar')){
+      const bar=document.createElement('div');
+      bar.className='sc-chat-toolbar';
+      bar.innerHTML=`<small>Puoi scorrere tutta la cronologia della conversazione.</small>
+        <div style="display:flex;gap:6px">
+          <button class="sc-chat-jump" onclick="scScrollChatTop()">↑ Inizio</button>
+          <button class="sc-chat-jump" onclick="scScrollChatBottom()">↓ Ultimi messaggi</button>
+        </div>`;
+      el.parentElement?.insertBefore(bar,el);
+    }
+
+    // Start at the bottom like WhatsApp, but then respect user's manual scrolling.
+    if(!el.dataset.scInitialPosition){
+      el.dataset.scInitialPosition='1';
+      el.scrollTop=el.scrollHeight;
+    }
+
+    // Show a "new messages" jump only when user is reading older messages.
+    let badge=el.parentElement?.querySelector('.sc-chat-bottom-indicator');
+    if(!badge){
+      badge=document.createElement('div');
+      badge.className='sc-chat-bottom-indicator hidden';
+      badge.innerHTML=`<button onclick="scScrollChatBottom()">↓ Torna agli ultimi messaggi</button>`;
+      el.parentElement?.appendChild(badge);
+    }
+
+    const syncBadge=()=>{
+      badge.classList.toggle('hidden',scChatAtBottom(el));
+    };
+    if(!el.dataset.scScrollBound){
+      el.dataset.scScrollBound='1';
+      el.addEventListener('scroll',syncBadge,{passive:true});
+    }
+    syncBadge();
+  },80);
+}
+
 function showForum(category=''){hideViews();document.getElementById('forumView').classList.remove('hidden');forumRoute=category||'';renderForum();renderAccounts();scrollTo(0,0)}
 function enterDashboard(){if(!user)return openLogin();hideViews();document.getElementById('dashboardView').classList.remove('hidden');renderAll();scrollTo(0,0)}
 function toggleMobileNav(){document.getElementById('publicNavLinks').classList.toggle('open')}
@@ -683,48 +852,64 @@ function togglePassword(){const p=document.getElementById('loginPassword');p.typ
 async function login(){
   const n=document.getElementById('loginName').value.trim();
   const p=document.getElementById('loginPassword').value;
-  const entry=Object.entries(AUTH_USERS).find(([k])=>k.toLowerCase()===n.toLowerCase());
+  const remember=document.getElementById('loginRemember')?.checked!==false;
+  try{localStorage.setItem('schoolcraft_team_login_pref_v83',JSON.stringify({remember}))}catch(e){}
   const err=document.getElementById('loginError');
   err.textContent='';
   if(!firebaseConfigured()){
-    err.textContent='Firebase non è ancora configurato. Apri FIREBASE_SETUP.txt e completa i dati del progetto.';
+    err.textContent='Firebase non è ancora configurato.';
     return;
   }
-  if(!entry || !p){
-    err.textContent='Nome o password non corretti.';
+  if(!n || !p){
+    err.textContent='Inserisci nome utente/e-mail e password.';
     return;
   }
   if(!window.firebaseBridge){
     err.textContent='Servizio di accesso non ancora disponibile. Ricarica la pagina.';
     return;
   }
+
+  // Compatibilità: "ziofede82" -> ziofede82@schoolcraft.local.
+  // È possibile anche usare direttamente una e-mail Firebase.
+  const email=n.includes('@') ? n.toLowerCase() : `${n.toLowerCase().replace(/\s+/g,'')}@schoolcraft.local`;
+
   const loginBtn=document.querySelector('#loginModal .btn.primary');
-  if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Accesso in corso...'}
+  if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Verifica account...'}
   try{
-    const profile=await window.firebaseBridge.login(entry[1].email,p);
-    if(!profile || !profile.active || !['owner','admin'].includes(profile.permission)){
+    const profile=await window.firebaseBridge.login(email,p,remember);
+    if(!profile || profile.active!==true){
       await window.firebaseBridge.logout();
-      err.textContent='Questo account non è autorizzato ad accedere al pannello.';
+      err.textContent='Questo account non è autorizzato nel Team Portal.';
       return;
     }
-    user={name:profile.username||entry[0],role:profile.role||'Staff',permission:profile.permission,uid:profile.uid};
+    user={
+      name:profile.displayName||profile.username||n,
+      role:profile.role||'Team Member',
+      permission:profile.permission||'member',
+      uid:profile.uid,
+      minecraft:profile.minecraft||profile.mc||''
+    };
     saveSession();
     closeModal('loginModal');
     document.getElementById('loginPassword').value='';
     renderAll();
-    toast('Accesso sicuro effettuato');
+    window.scSyncAccess?.();
+    window.scOpenHome?.();
+    toast(`Benvenuto, ${user.name}`);
   }catch(e){
-    console.error('Staff login error:',e);
+    console.error('Team login error:',e);
     const code=String(e?.code||e?.message||'');
-    if(code.includes('invalid-credential')||code.includes('wrong-password')||code.includes('user-not-found')){
-      err.textContent='Nome o password non corretti.';
+    if(code.includes('invalid-credential')||code.includes('wrong-password')||code.includes('user-not-found')||code.includes('invalid-email')){
+      err.textContent='Nome utente/e-mail o password non corretti.';
+    }else if(code.includes('account-not-authorized')||code.includes('Account non autorizzato')){
+      err.textContent='Account Firebase valido, ma non autorizzato nel Team Schoolcraft.';
     }else if(code.includes('network')){
       err.textContent='Problema di connessione a Firebase. Riprova tra qualche secondo.';
     }else{
-      err.textContent='Accesso non riuscito. Riprova dopo aver ricaricato la pagina.';
+      err.textContent='Accesso non riuscito. Controlla account, profilo Team e connessione.';
     }
   }finally{
-    if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Entra nel pannello'}
+    if(loginBtn){loginBtn.disabled=false;loginBtn.textContent='Entra nel portale'}
   }
 }
 async function logout(){
@@ -732,7 +917,20 @@ async function logout(){
   user=null;saveSession();showPublic();toast('Disconnessione completata');
 }
 function toggleAccountMenu(id){document.querySelectorAll('.account-menu').forEach(x=>{if(x.id!==id)x.classList.add('hidden')});document.getElementById(id)?.classList.toggle('hidden')}
-function accountHTML(id){return user?`<button class="account-trigger" onclick="toggleAccountMenu('${id}Menu')"><span class="dot"></span><span class="account-meta"><strong>${esc(user.name)}</strong><small>${esc(user.role)} · clicca</small></span><span>⌄</span></button><div class="account-menu hidden" id="${id}Menu"><button onclick="enterDashboard()">▣ Entra nel pannello</button><button onclick="showTeamAdmin()">♟ Gestisci Team</button><button onclick="logout()" style="color:#ffd1d8">↪ Esci</button></div>`:`<button class="btn small primary" onclick="openLogin()">Accedi</button>`}
+function accountHTML(id){
+  if(!user)return `<button class="btn small primary" onclick="openLogin()">Accedi</button>`;
+  const admin=['owner','admin'].includes(user.permission);
+  const head=user.minecraft?`<img class="sc-account-head" src="https://mc-heads.net/avatar/${encodeURIComponent(user.minecraft)}/32" alt="" onerror="this.style.display='none'">`:`<span class="sc-account-fallback">👤</span>`;
+  return `<div class="sc-account-wrap"><button class="account-trigger" onclick="toggleAccountMenu('${id}Menu')">${head}<span class="account-meta"><strong>${esc(user.name)}</strong><small>${esc(user.role)} · clicca</small></span><span>⌄</span></button>
+  <div class="account-menu hidden" id="${id}Menu">
+    <button onclick="scOpenHome?.()">⌂ Dashboard personale</button>
+    <button onclick="scOpenProfile?.()">👤 Il mio profilo</button>
+    <button onclick="scOpenNotifications?.()">🔔 Notifiche</button>
+    <button onclick="scOpenSettings?.()">⚙ Impostazioni</button>
+    ${admin?`<button onclick="enterDashboard()">▣ Pannello Staff</button><button onclick="showTeamAdmin()">♟ Gestisci Team</button>`:''}
+    <button onclick="logout()" style="color:#ffd1d8">↪ Esci</button>
+  </div></div>`;
+}
 function renderAccounts(){['publicAccount','participantsAccount','teamAccount','spoilersAccount','forumAccount','rulesAccount','dashAccount'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerHTML=accountHTML(id)})}
 
 function eventDate(e){return String(e.date||'').slice(0,10)}
@@ -818,7 +1016,7 @@ function memberCard(m,actions=false){
 }
 function renderParticipants(){const box=document.getElementById('participantsGrid');if(!box)return;box.innerHTML=state.members.map(m=>memberCard(m,!!user)).join('')||'<div class="empty">Nessun partecipante.</div>';document.getElementById('participantAddBtn')?.classList.toggle('hidden',!user)}
 function roleOptions(value){return ROLES.map(r=>`<option ${r===value?'selected':''}>${r}</option>`).join('')}
-function openParticipantModal(id){if(!user)return;const m=id?state.members.find(x=>x.id===id):null;openGeneric(m?'Modifica partecipante':'Nuovo partecipante',`<div class="field"><label>Nome</label><input id="pName" class="input" value="${esc(m?.name||'')}"></div><div class="field"><label>Nickname Minecraft</label><input id="pMinecraft" class="input" value="${esc(m?.minecraft||'')}"></div><div class="field"><label>Ruolo</label><select id="pRole" class="input">${roleOptions(m?.role||'Attore')}</select></div><div class="field"><label>Descrizione</label><textarea id="pDesc" class="input">${esc(m?.description||'')}</textarea></div><button class="btn primary" onclick="saveParticipant('${id||''}')">Salva</button>`)}
+function openParticipantModal(id){if(!user)return;const m=id?state.members.find(x=>x.id===id):null;openGeneric(m?'Modifica partecipante':'Nuovo partecipante',`<div class="field"><label>Nome</label><input id="pName" class="input" value="${esc(m?.name||'')}"></div><div class="field"><label>Nickname / Skin Minecraft</label><input id="pMinecraft" class="input" value="${esc(m?.minecraft||'')}"></div><div class="field"><label>Ruolo</label><select id="pRole" class="input">${roleOptions(m?.role||'Attore')}</select></div><div class="field"><label>Descrizione</label><textarea id="pDesc" class="input">${esc(m?.description||'')}</textarea></div><button class="btn primary" onclick="saveParticipant('${id||''}')">Salva</button>`)}
 function saveParticipant(id){const n=document.getElementById('pName').value.trim(),mc=document.getElementById('pMinecraft').value.trim();if(!n||!mc)return toast('Nome e nickname Minecraft sono obbligatori');const obj={id:id||uid('m'),name:n,minecraft:mc,role:document.getElementById('pRole').value,description:document.getElementById('pDesc').value.trim()};if(id){state.members[state.members.findIndex(x=>x.id===id)]=obj}else{state.members.push(obj);state.attendance[obj.id]='pending'}closeModal('genericModal');saveData('Partecipante salvato');if(teamManageMode)renderTeamPage()}
 function deleteParticipant(id){const m=state.members.find(x=>x.id===id);if(!m||!confirm(`Rimuovere ${m.name}?`))return;state.members=state.members.filter(x=>x.id!==id);delete state.attendance[id];saveData('Partecipante rimosso');if(teamManageMode)renderTeamPage()}
 function renderTeamPage(){
@@ -854,7 +1052,7 @@ function markEveryone(s){state.members.forEach(m=>state.attendance[m.id]=s);save
 function toggleRemoveMode(){removeMode=!removeMode;editMode=false;renderAttendance();toast(removeMode?'Modalità rimozione: clicca una persona':'Modalità rimozione disattivata')}
 function toggleEditMode(){editMode=!editMode;removeMode=false;renderAttendance();toast(editMode?'Modalità modifica: clicca una persona':'Modalità modifica disattivata')}
 function memberRowClick(id){const m=state.members.find(x=>x.id===id);if(removeMode){if(confirm(`Vuoi togliere ${m.name} dalla tabella?`)){state.members=state.members.filter(x=>x.id!==id);delete state.attendance[id];removeMode=false;saveData('Persona rimossa')}}else if(editMode){editMode=false;openMemberModal(id)}}
-function openMemberModal(id){const m=id?state.members.find(x=>x.id===id):null;openGeneric(m?'Modifica persona':'Aggiungi persona',`<div class="field"><label>Nome</label><input id="mName" class="input" value="${esc(m?.name||'')}"></div><div class="field"><label>Ruolo</label><select id="mRole" class="input">${roleOptions(m?.role||'Attore')}</select></div><div class="field"><label>Nickname Minecraft (facoltativo)</label><input id="mMc" class="input" value="${esc(m?.minecraft||'')}"></div><div class="field"><label>Descrizione (facoltativa)</label><textarea id="mDesc" class="input">${esc(m?.description||'')}</textarea></div><button class="btn primary" onclick="saveMember('${id||''}')">Salva</button>`)}
+function openMemberModal(id){const m=id?state.members.find(x=>x.id===id):null;openGeneric(m?'Modifica persona':'Aggiungi persona',`<div class="field"><label>Nome</label><input id="mName" class="input" value="${esc(m?.name||'')}"></div><div class="field"><label>Ruolo</label><select id="mRole" class="input">${roleOptions(m?.role||'Attore')}</select></div><div class="field"><label>Nickname / Skin Minecraft (facoltativo)</label><input id="mMc" class="input" value="${esc(m?.minecraft||'')}"></div><div class="field"><label>Descrizione (facoltativa)</label><textarea id="mDesc" class="input">${esc(m?.description||'')}</textarea></div><button class="btn primary" onclick="saveMember('${id||''}')">Salva</button>`)}
 function saveMember(id){const n=document.getElementById('mName').value.trim();if(!n)return toast('Inserisci il nome');const obj={id:id||uid('m'),name:n,role:document.getElementById('mRole').value,minecraft:document.getElementById('mMc').value.trim()||n,description:document.getElementById('mDesc').value.trim()};if(id){state.members[state.members.findIndex(x=>x.id===id)]=obj}else{state.members.push(obj);state.attendance[obj.id]='pending'}closeModal('genericModal');saveData('Persona salvata')}
 function saveAttendance(){const title=document.getElementById('attendanceTitle').value.trim();if(!title)return toast('Inserisci un titolo per il salvataggio');state.attendanceHistory.unshift({id:uid('a'),title,category:document.getElementById('attendanceCategory').value,date:new Date().toISOString(),createdBy:user.name,records:state.members.map(m=>({id:m.id,name:m.name,role:m.role,status:state.attendance[m.id]||'pending'}))});document.getElementById('attendanceTitle').value='';saveData('Appello archiviato')}
 function renderArchive(){const box=document.getElementById('archiveList');box.innerHTML=state.attendanceHistory.length?state.attendanceHistory.map(a=>`<div class="card" style="margin-bottom:12px"><div class="top"><div><div class="role">${esc(a.category)}</div><h3>${esc(a.title)}</h3><div class="muted">${fmtDate(a.date)} · ${esc(a.createdBy)}</div></div><button class="btn small danger" onclick="deleteArchive('${a.id}')">Elimina</button></div><details style="margin-top:12px"><summary>Mostra appello</summary><div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Nome</th><th>Ruolo</th><th>Stato</th></tr></thead><tbody>${a.records.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.role)}</td><td>${r.status==='present'?'Presente':r.status==='absent'?'Assente':r.status==='excused'?'Giustificato':'Da segnare'}</td></tr>`).join('')}</tbody></table></div></details></div>`).join(''):'<div class="empty">Nessun appello archiviato.</div>'}
@@ -1100,17 +1298,30 @@ function isStaff(){
     && ['owner','admin'].includes(user.permission)
     && window.__firebaseStaffSession===true;
 }
+
+function scTeamAuthenticated(){
+  return !!(user && window.__firebaseTeamSession===true);
+}
+function scForumDisplayName(){
+  if(scTeamAuthenticated())return user.name||'Team Member';
+  return communityProfile?.name||'Utente';
+}
+function scForumMinecraft(){
+  if(scTeamAuthenticated())return user.minecraft||user.name||'Steve';
+  return communityProfile?.minecraft||'Steve';
+}
+
 function ensureCommunityProfile(cb){
-  if(isStaff()){cb?.();return}
+  if(scTeamAuthenticated()){cb?.();return}
   if(communityProfile?.name&&communityProfile?.minecraft){cb?.();return}
-  openForumLogin(cb);
+  openLogin();
 }
 function openForumLogin(cb){
   window.__communityCb=cb||null;
   openGeneric('Accedi alla Community',`
     <div class="community-login-note" style="margin-bottom:16px"><strong>Un solo accesso per tutta la Community Schoolcraft.</strong><br>Il profilo che crei resta salvato su questo dispositivo e viene usato sia nel Forum sia nei commenti degli Spoiler. Inserisci il nome da mostrare e il tuo nickname Minecraft.</div>
     <div class="field"><label>Nome visualizzato</label><input id="cpName" class="input" autocomplete="nickname" placeholder="Es. Francesco"></div>
-    <div class="field"><label>Nickname Minecraft</label><input id="cpMc" class="input" autocomplete="off" placeholder="Es. ziofede82"></div>
+    <div class="field"><label>Nickname / Skin Minecraft</label><input id="cpMc" class="input" autocomplete="off" placeholder="Es. ziofede82"></div>
     <div class="card" style="padding:12px;margin:4px 0 16px;box-shadow:none"><div class="muted" style="font-size:.72rem;line-height:1.55">Il nickname Minecraft serve anche per mostrare la tua testa accanto a discussioni e messaggi.</div></div>
     <div id="communityReservedError" class="notice hidden" style="margin-bottom:12px;border-color:rgba(255,102,122,.35);color:#ffd8de"></div>
     <button class="btn primary" style="width:100%" onclick="saveCommunityProfile()">Accedi alla Community</button>
@@ -1163,7 +1374,7 @@ function renderCommunityProfileBar(){
   ];
   targets.forEach(({id,menu})=>{
     const box=document.getElementById(id);if(!box)return;
-    if(isStaff()){box.innerHTML='';return}
+    if(scTeamAuthenticated()){box.innerHTML='';return}
     if(!communityProfile){
       box.innerHTML=`<button class="btn small primary forum-access-btn" onclick="openForumLogin()">👤 Accedi</button>`;
       return;
@@ -1198,7 +1409,7 @@ function editCommunityProfile(){
   const old=communityProfile;
   openGeneric('Modifica profilo Community',`
     <div class="field"><label>Nome visualizzato</label><input id="cpName" class="input" value="${esc(old?.name||'')}"></div>
-    <div class="field"><label>Nickname Minecraft</label><input id="cpMc" class="input" value="${esc(old?.minecraft||'')}"></div>
+    <div class="field"><label>Nickname / Skin Minecraft</label><input id="cpMc" class="input" value="${esc(old?.minecraft||'')}"></div>
     <button class="btn primary" style="width:100%" onclick="saveCommunityProfile()">Salva modifiche</button>
   `);
 }
@@ -1278,20 +1489,20 @@ function forumMyChatsHTML(){
 function renderForum(){
   renderCommunityProfileBar();
   const box=document.getElementById('forumContent');if(!box)return;
-  if(!isStaff()&&!communityProfile){
+  if(!scTeamAuthenticated()&&!communityProfile){
     forumRoute='';
     box.innerHTML=`
       <div class="forum-login-gate">
         <div class="forum-login-card">
           <div class="eyebrow">Schoolcraft Community Account</div>
           <h2>Entra nel Forum.</h2>
-          <p>Accedi con un profilo Community per aprire discussioni, rispondere, votare le proposte e usare le aree di assistenza. Ti basta scegliere il nome pubblico e indicare il tuo nickname Minecraft.</p>
+          <p>Accedi con il tuo account Team Schoolcraft. Lo stesso accesso vale automaticamente per Forum, Sneak-Peak e commenti.</p>
           <div class="forum-login-features">
             <div class="forum-login-feature"><strong>🧑 Profilo Minecraft</strong><span>La tua testa appare accanto a messaggi e discussioni.</span></div>
             <div class="forum-login-feature"><strong>🔒 Richieste private</strong><span>Le tue richieste riservate restano separate da quelle degli altri utenti.</span></div>
             <div class="forum-login-feature"><strong>🌍 Community</strong><span>Partecipa a proposte, conversazioni e contenuti pubblici.</span></div>
           </div>
-          <button class="btn primary" onclick="openForumLogin()" style="min-width:190px">Accedi al Forum</button>
+          <button class="btn primary" onclick="openLogin()" style="min-width:190px">Accedi al Team</button>
         </div>
       </div>`;
     return;
@@ -1326,11 +1537,11 @@ function threadCard(t){
     </div>
   </article>`;
 }
-function openNewThread(k){ensureCommunityProfile(()=>{const c=FORUM_CATEGORIES[k];let extra='';if(k==='bugs')extra=`<div class="field"><label>Area interessata</label><select id="ftArea" class="input"><option>Server</option><option>Sito</option><option>Discord</option><option>Launcher</option></select></div><div class="field"><label>Come riprodurre il problema</label><textarea id="ftRepro" class="input"></textarea></div><div class="field"><label>Screenshot / video (URL, facoltativo)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Data e ora approssimativa</label><input id="ftWhen" class="input" type="datetime-local"></div>`;if(k==='players')extra=`<div class="field"><label>Giocatore segnalato</label><input id="ftTarget" class="input"></div><div class="field"><label>Motivazione</label><select id="ftReason" class="input"><option>RDM</option><option>VDM</option><option>FailRP</option><option>Toxicity</option><option>Altro</option></select></div><div class="field"><label>Data e ora</label><input id="ftWhen" class="input" type="datetime-local"></div><div class="field"><label>Prove screenshot/video (URL)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Eventuali testimoni</label><input id="ftWitness" class="input"></div>`;if(k==='lounge')extra=`<div class="field"><label>Area del Salotto</label><select id="ftTopic" class="input">${LOUNGE_TOPICS.map(x=>`<option>${x}</option>`).join('')}</select></div>`;openGeneric(`Nuova discussione · ${c.title}`,`<div class="field"><label>Nickname Minecraft</label><input class="input" value="${esc(communityProfile?.minecraft||user?.name||'')}" disabled></div><div class="field"><label>Titolo</label><input id="ftTitle" class="input" placeholder="Titolo chiaro e descrittivo"></div><div class="field"><label>Descrizione</label><textarea id="ftBody" class="input" placeholder="Scrivi tutti i dettagli utili..."></textarea></div>${extra}<button class="btn primary" onclick="createThread('${k}')">Pubblica / Invia</button>`)});}
+function openNewThread(k){ensureCommunityProfile(()=>{const c=FORUM_CATEGORIES[k];let extra='';if(k==='bugs')extra=`<div class="field"><label>Area interessata</label><select id="ftArea" class="input"><option>Server</option><option>Sito</option><option>Discord</option><option>Launcher</option></select></div><div class="field"><label>Come riprodurre il problema</label><textarea id="ftRepro" class="input"></textarea></div><div class="field"><label>Screenshot / video (URL, facoltativo)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Data e ora approssimativa</label><input id="ftWhen" class="input" type="datetime-local"></div>`;if(k==='players')extra=`<div class="field"><label>Giocatore segnalato</label><input id="ftTarget" class="input"></div><div class="field"><label>Motivazione</label><select id="ftReason" class="input"><option>RDM</option><option>VDM</option><option>FailRP</option><option>Toxicity</option><option>Altro</option></select></div><div class="field"><label>Data e ora</label><input id="ftWhen" class="input" type="datetime-local"></div><div class="field"><label>Prove screenshot/video (URL)</label><input id="ftEvidence" class="input" placeholder="https://..."></div><div class="field"><label>Eventuali testimoni</label><input id="ftWitness" class="input"></div>`;if(k==='lounge')extra=`<div class="field"><label>Area del Salotto</label><select id="ftTopic" class="input">${LOUNGE_TOPICS.map(x=>`<option>${x}</option>`).join('')}</select></div>`;openGeneric(`Nuova discussione · ${c.title}`,`<div class="field"><label>Nickname / Skin Minecraft</label><input class="input" value="${esc(scForumMinecraft())}" disabled></div><div class="field"><label>Titolo</label><input id="ftTitle" class="input" placeholder="Titolo chiaro e descrittivo"></div><div class="field"><label>Descrizione</label><textarea id="ftBody" class="input" placeholder="Scrivi tutti i dettagli utili..."></textarea></div>${extra}<button class="btn primary" onclick="createThread('${k}')">Pubblica / Invia</button>`)});}
 async function createThread(k){
   const title=document.getElementById('ftTitle').value.trim(),body=document.getElementById('ftBody').value.trim();
   if(!title||!body)return toast('Inserisci titolo e descrizione');
-  const c=FORUM_CATEGORIES[k],authorName=isStaff()?user.name:communityProfile.name,minecraft=isStaff()?user.name:communityProfile.minecraft;
+  const c=FORUM_CATEGORIES[k],authorName=scForumDisplayName(),minecraft=scForumMinecraft();
   const extra={};
   ['Area','Repro','Evidence','When','Target','Reason','Witness','Topic'].forEach(x=>{const e=document.getElementById('ft'+x);if(e&&e.value)extra[x.toLowerCase()]=e.value});
   const submitBtn=document.querySelector('#genericModal .btn.primary');
@@ -1448,6 +1659,8 @@ async function refreshOpenThread(id){
     if(forumRoute==='thread:'+id)renderForum();
     toast('Conversazione aggiornata');
   }catch(e){console.error(e);toast('Impossibile aggiornare la conversazione')}
+
+  scEnhanceOpenChat();
 }
 function forumComposerKey(e,id){
   if(e.key==='Enter'&&!e.shiftKey){
@@ -1466,8 +1679,8 @@ async function sendReply(id){
     try{
       await window.communityBridge.addReply(id,{
         body,
-        authorName:isStaff()?user.name:communityProfile.name,
-        minecraft:isStaff()?user.name:communityProfile.minecraft,
+        authorName:scForumDisplayName(),
+        minecraft:scForumMinecraft(),
         staff:isStaff()
       });
       scSound?.('success');
@@ -1481,6 +1694,8 @@ async function sendReply(id){
       const current=document.getElementById('replyText');if(current)current.disabled=false;
     }
   });
+
+  setTimeout(()=>scScrollChatBottom(true),120);
 }
 function openThreadAdmin(id){
   const t=[...(state.forumPublic||[]),...(state.forumPrivate||[])].find(x=>x.id===id);
@@ -1620,18 +1835,18 @@ function openSpoiler(id){
   hideViews();document.getElementById('spoilersView').classList.remove('hidden');
   renderCommunityProfileBar();renderAccounts();
   const wrap=document.querySelector('#spoilersView section:last-child .wrap');
-  const canWrite=isStaff()||!!communityProfile;
+  const canWrite=scTeamAuthenticated()||!!communityProfile;
   const composer=!x.chatOpen&&!isStaff()
     ? '<div class="muted">La chat è temporaneamente chiusa.</div>'
     : canWrite
       ? `<textarea id="spoilerMsg" class="input" placeholder="Scrivi un commento..."></textarea><button class="btn primary" style="margin-top:8px;width:100%" onclick="sendSpoilerComment('${x.id}')">Invia commento</button>`
-      : `<div class="community-login-note"><strong>Partecipa alla discussione.</strong><br><span class="muted">Accedi con il tuo profilo Community: lo stesso accesso vale anche per il Forum e resterà memorizzato su questo dispositivo.</span><button class="btn primary" style="margin-top:12px;width:100%" onclick="openForumLogin(()=>openSpoiler('${x.id}'))">👤 Accedi per commentare</button></div>`;
+      : `<div class="community-login-note"><strong>Partecipa alla discussione.</strong><br><span class="muted">Accedi con il tuo account Team Schoolcraft. Lo stesso accesso vale anche per Forum e Sneak-Peak.</span><button class="btn primary" style="margin-top:12px;width:100%" onclick="openLogin()">👤 Accedi al Team</button></div>`;
   wrap.innerHTML=`<div class="breadcrumbs"><button onclick="restoreSpoilerGrid()">Spoiler</button><span>›</span><strong>${esc(x.title)}</strong></div><div class="spoiler-detail"><div class="card"><img class="spoiler-main-image" src="${esc(x.image)}"><div class="role" style="margin-top:16px">Anteprima ufficiale</div><h2>${esc(x.title)}</h2><p style="white-space:pre-wrap;line-height:1.7">${esc(x.description||'')}</p>${isStaff()?`<div class="toolbar"><button class="btn" onclick="openSpoilerEditor('${x.id}')">Modifica spoiler</button><button class="btn ${x.chatOpen?'danger':'success'}" onclick="toggleSpoilerChat('${x.id}',${!x.chatOpen})">${x.chatOpen?'Blocca chat':'Avvia chat'}</button></div>`:''}</div><div class="chatbox"><div class="chathead"><div><strong>Discussione spoiler</strong><div class="muted" style="font-size:.7rem">${x.chatOpen?'Chat aperta alla community':'Chat bloccata dallo staff'}</div></div><span class="status ${x.chatOpen?'present':'absent'}">${x.chatOpen?'APERTA':'CHIUSA'}</span></div><div id="spoilerComments" class="chatmessages"></div><div class="chatcomposer">${composer}</div></div></div>`;
   renderSpoilerComments(id);
 }
 function restoreSpoilerGrid(){const sec=document.querySelector('#spoilersView section:last-child');sec.innerHTML=`<div class="wrap"><div class="forum-toolbar"><div><span class="tag" id="spoilerCount">0 spoiler</span></div><button id="spoilerAddBtn" class="btn primary hidden" onclick="openSpoilerEditor()">+ Pubblica spoiler</button></div><div id="spoilersGrid" class="spoiler-grid"></div></div>`;renderSpoilers()}
 function renderSpoilerComments(id){const box=document.getElementById('spoilerComments');if(!box)return;const list=state.communityReplies['spoiler:'+id]||[];box.innerHTML=list.length?list.map(r=>`<div class="chatmessage"><img class="mc-avatar" src="${mcHead(r.minecraft)}"><div class="reply-body"><div class="thread-meta"><strong>${esc(r.authorName)}</strong>${r.staff?'<span class="tag">STAFF</span>':''}<span>${fmtDate(r.createdAt)}</span></div><div style="margin-top:5px;white-space:pre-wrap">${esc(r.body)}</div>${isStaff()||r.authorUid===window.communityUid?`<div class="reply-actions"><button class="btn small" onclick="editSpoilerComment('${id}','${r.id}')">Modifica</button><button class="btn small danger" onclick="deleteSpoilerComment('${id}','${r.id}')">Elimina</button></div>`:''}</div></div>`).join(''):'<div class="empty">Nessun commento. Apri tu la discussione.</div>'}
-async function sendSpoilerComment(id){ensureCommunityProfile(async()=>{const body=document.getElementById('spoilerMsg')?.value.trim();if(!body)return toast('Scrivi un messaggio');await window.communityBridge.addSpoilerComment(id,{body,authorName:isStaff()?user.name:communityProfile.name,minecraft:isStaff()?user.name:communityProfile.minecraft,staff:isStaff()});document.getElementById('spoilerMsg').value=''})}
+async function sendSpoilerComment(id){ensureCommunityProfile(async()=>{const body=document.getElementById('spoilerMsg')?.value.trim();if(!body)return toast('Scrivi un messaggio');await window.communityBridge.addSpoilerComment(id,{body,authorName:scForumDisplayName(),minecraft:scForumMinecraft(),staff:isStaff()});document.getElementById('spoilerMsg').value=''})}
 async function toggleSpoilerChat(id,val){await window.communityBridge.updateSpoiler(id,{chatOpen:val});setTimeout(()=>openSpoiler(id),150)}
 function editSpoilerComment(sid,rid){const r=(state.communityReplies['spoiler:'+sid]||[]).find(x=>x.id===rid);if(!r)return;openGeneric('Modifica commento',`<textarea id="editSpBody" class="input">${esc(r.body)}</textarea><button class="btn primary" style="margin-top:10px" onclick="saveSpoilerComment('${sid}','${rid}')">Salva</button>`)}
 async function saveSpoilerComment(sid,rid){const body=document.getElementById('editSpBody').value.trim();if(!body)return;await window.communityBridge.updateSpoilerComment(sid,rid,{body});closeModal('genericModal')}
@@ -1640,7 +1855,7 @@ function applySpoilers(items){state.spoilers=items||[];localStorage.setItem(KEY,
 function applySpoilerComments(id,items){state.communityReplies['spoiler:'+id]=items||[];localStorage.setItem(KEY,JSON.stringify(state));renderSpoilerComments(id)}
 window.applySpoilers=applySpoilers;window.applySpoilerComments=applySpoilerComments;
 
-function renderAll(){document.documentElement.style.setProperty('--scale',state.settings.textScale||1);renderAccounts();renderCommunityProfileBar();renderHeroStatus();renderChanges();renderRegistration();renderCalendars();renderGallery();renderParticipants();renderSpoilers();renderTeamPage();renderRulesPage();renderOverview();renderAttendance();renderArchive();renderChangesManager();renderReminders();renderEvaluations();renderStatistics();renderRooms();renderSettings();const ed=document.getElementById('rulesEditor');if(ed&&!document.getElementById('panel-rules').classList.contains('hidden'))ed.value=state.rules}
+function renderAll(){document.documentElement.style.setProperty('--scale',state.settings.textScale||1);renderAccounts();renderCommunityProfileBar();renderHeroStatus();renderChanges();renderRegistration();renderCalendars();renderGallery();renderParticipants();renderSpoilers();renderTeamPage();renderRulesPage();renderOverview();renderAttendance();renderArchive();renderChangesManager();renderReminders();renderEvaluations();renderStatistics();renderRooms();renderSettings();scSyncSingleTeamLoginUI?.();const ed=document.getElementById('rulesEditor');if(ed&&!document.getElementById('panel-rules').classList.contains('hidden'))ed.value=state.rules}
 document.addEventListener('click',e=>{if(!e.target.closest('.account'))document.querySelectorAll('.account-menu').forEach(x=>x.classList.add('hidden'))})
 document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden'));if(e.key==='Enter'&&!document.getElementById('loginModal').classList.contains('hidden'))login()})
 document.getElementById('rulesEditor').value=state.rules;
@@ -1757,7 +1972,7 @@ if(typeof _scOpenGeneric==='function'){
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, setPersistence, browserLocalPersistence, browserSessionPersistence, signInWithEmailAndPassword, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, where, orderBy, addDoc, updateDoc, deleteDoc, getDocs, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
 let app=null,auth=null,db=null,unsubPublic=null,unsubPrivate=null,currentProfile=null;
@@ -1765,7 +1980,31 @@ let unsubThreadsPublic=null,unsubThreadsPrivate=null,unsubSpoilers=null;
 const replyUnsubs=new Map(), spoilerCommentUnsubs=new Map();
 function configured(){return !!(window.FIREBASE_CONFIG&&window.firebaseConfigured&&window.firebaseConfigured())}
 function isStaffProfile(p){return !!p&&p.active===true&&['owner','admin'].includes(p.permission)}
-async function profileFor(uid){try{const snap=await getDoc(doc(db,'staff',uid));return snap.exists()?{uid,...snap.data()}:null}catch(e){return null}}
+function isAuthorizedProfile(p){
+  if(!p||p.active!==true)return false;
+  const perm=String(p.permission||'member').toLowerCase();
+  return ['owner','admin','member','team'].includes(perm) || !!p.role;
+}
+async function profileFor(uid){
+  try{
+    // Nuova struttura V8.1: tutti gli account, Staff compreso, possono vivere in team_accounts.
+    const teamSnap=await getDoc(doc(db,'team_accounts',uid));
+    if(teamSnap.exists()){
+      const p={uid,...teamSnap.data()};
+      try{const o=JSON.parse(localStorage.getItem('schoolcraft_profile_override_'+uid)||'null');if(o)Object.assign(p,o)}catch(e){}
+      return p;
+    }
+    // Compatibilità con i tre account Staff già esistenti.
+    const legacy=await getDoc(doc(db,'staff',uid));
+    if(!legacy.exists())return null;
+    const p={uid,...legacy.data()};
+    try{const o=JSON.parse(localStorage.getItem('schoolcraft_profile_override_'+uid)||'null');if(o)Object.assign(p,o)}catch(e){}
+    return p;
+  }catch(e){
+    console.error('Profile lookup',e);
+    return null;
+  }
+}
 async function ensureAnonymous(){
   if(!auth)throw new Error('auth/not-ready');
 
@@ -1782,21 +2021,24 @@ async function ensureAnonymous(){
 async function init(){
  if(!configured()){window.onCloudStatus?.(false,false);return}
  try{
-  app=initializeApp(window.FIREBASE_CONFIG);auth=getAuth(app);db=getFirestore(app);await setPersistence(auth,browserLocalPersistence);subscribePublic();
+  app=initializeApp(window.FIREBASE_CONFIG);
+  auth=getAuth(app);
+  db=getFirestore(app);
+  let rememberPref=true;
+  try{rememberPref=JSON.parse(localStorage.getItem('schoolcraft_team_login_pref_v83')||'{"remember":true}').remember!==false}catch(e){}
+  await setPersistence(auth, rememberPref ? browserLocalPersistence : browserSessionPersistence);
+
   onAuthStateChanged(auth,async fbUser=>{
    if(!fbUser){
      currentProfile=null;
      window.communityUid=null;
+     window.__firebaseTeamSession=false;
      window.__firebaseStaffSession=false;
+     window.onFirebaseTeamSession?.(false,null);
      window.onFirebaseStaffSession?.(false,null);
+     if(unsubPublic){unsubPublic();unsubPublic=null}
      if(unsubPrivate){unsubPrivate();unsubPrivate=null}
-
-     // IMPORTANTE:
-     // non viene creato automaticamente un account anonimo qui.
-     // In questo modo il login Staff non entra più in gara con signInAnonymously().
-     // L'account anonimo verrà creato SOLO quando una funzione Community ne ha bisogno.
-     await refreshPublicThreads();
-     await refreshSpoilers();
+     // V8.1 PRIVATO: nessun documento Schoolcraft viene letto prima del login.
      window.onCloudStatus?.(true,false);
      return;
    }
@@ -1804,26 +2046,30 @@ async function init(){
    window.communityUid=fbUser.uid;
    const profile=await profileFor(fbUser.uid);
 
-   if(isStaffProfile(profile)){
+   if(isAuthorizedProfile(profile)){
      currentProfile=profile;
-     window.__firebaseStaffSession=true;
-     window.onFirebaseStaffSession?.(true,profile);
+     const staff=isStaffProfile(profile);
+     window.__firebaseTeamSession=true;
+     window.__firebaseStaffSession=staff;
+     window.onFirebaseTeamSession?.(true,profile);
+     window.onFirebaseStaffSession?.(staff,staff?profile:null);
+
+     subscribePublic();
      subscribePrivate();
-     await refreshCommunityData(true);
+     await refreshCommunityData(staff);
      window.onCloudStatus?.(true,true);
    }else{
      currentProfile=null;
+     window.__firebaseTeamSession=false;
      window.__firebaseStaffSession=false;
+     window.onFirebaseTeamSession?.(false,null);
      window.onFirebaseStaffSession?.(false,null);
+     if(unsubPublic){unsubPublic();unsubPublic=null}
      if(unsubPrivate){unsubPrivate();unsubPrivate=null}
-     await refreshCommunityData(false);
      window.onCloudStatus?.(true,false);
    }
   });
-  // NON creare subito una sessione anonima qui.
-  // Firebase deve prima avere il tempo di ripristinare un eventuale account Staff
-  // già autenticato. onAuthStateChanged gestirà da solo il caso senza utente.
-  window.onCloudStatus?.(true,!!currentProfile)
+  window.onCloudStatus?.(true,false)
  }catch(e){console.error('Firebase init error',e);window.onCloudStatus?.(false,false)}
 }
 function subscribePublic(){if(unsubPublic)unsubPublic();unsubPublic=onSnapshot(doc(db,'portal_public','main'),snap=>{if(snap.exists())window.applyPublicCloud?.(snap.data())},e=>console.error('Public cloud listener',e))}
@@ -1872,31 +2118,43 @@ function subscribeSpoilers(){return refreshSpoilers()}
 function subscribePublicThreads(){return refreshPublicThreads()}
 function subscribePrivateThreads(staffMode){return refreshPrivateThreads(staffMode)}
 function watchReplies(threadId){return refreshReplies(threadId)}
-async function login(email,password){
-  // signInWithEmailAndPassword sostituisce direttamente l'eventuale sessione anonima.
-  // Evitiamo signOut() qui perché scatenava una race condition con onAuthStateChanged.
+async function login(email,password,remember=true){
+  await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
   const cred=await signInWithEmailAndPassword(auth,email,password);
   const profile=await profileFor(cred.user.uid);
-  if(!isStaffProfile(profile)){await signOut(auth);throw new Error('Account non autorizzato')}
-  currentProfile=profile;window.communityUid=cred.user.uid;
-  window.__firebaseStaffSession=true;
-  window.onFirebaseStaffSession?.(true,profile);
+  if(!isAuthorizedProfile(profile)){
+    await signOut(auth);
+    throw new Error('account-not-authorized');
+  }
+  currentProfile=profile;
+  window.communityUid=cred.user.uid;
+  const staff=isStaffProfile(profile);
+  window.__firebaseTeamSession=true;
+  window.__firebaseStaffSession=staff;
+  window.onFirebaseTeamSession?.(true,profile);
+  window.onFirebaseStaffSession?.(staff,staff?profile:null);
+  subscribePublic();
   subscribePrivate();
-  await refreshCommunityData(true);
+  await refreshCommunityData(staff);
   window.onCloudStatus?.(true,true);
   return profile;
 }
 async function logout(){
+  window.__firebaseTeamSession=false;
   window.__firebaseStaffSession=false;
+  window.onFirebaseTeamSession?.(false,null);
   window.onFirebaseStaffSession?.(false,null);
   if(auth?.currentUser)await signOut(auth);
   currentProfile=null;
   window.communityUid=null;
+  if(unsubPublic){unsubPublic();unsubPublic=null}
+  if(unsubPrivate){unsubPrivate();unsubPrivate=null}
 
   // Restiamo realmente disconnessi.
   // Se l'utente apre/usa il Forum, ensureAnonymous() creerà lì la sessione Community.
-  await refreshPublicThreads();
-  await refreshSpoilers();
+  window.applyForumPublic?.([]);
+  window.applyForumPrivate?.([]);
+  window.applySpoilers?.([]);
 }
 async function saveState(s){
   if(!auth?.currentUser||!currentProfile||!isStaffProfile(currentProfile))throw new Error('Non autenticato');
@@ -1932,12 +2190,36 @@ async function getSessionState(){
   const profile=await profileFor(fbUser.uid);
   return {
     authenticated:true,
+    team:isAuthorizedProfile(profile),
     staff:isStaffProfile(profile),
     uid:fbUser.uid,
     profile
   };
 }
-window.firebaseBridge={login,logout,saveState,reload,getSessionState};
+
+async function updateOwnProfile(patch){
+  const fbUser=auth.currentUser;
+  if(!fbUser)throw new Error('not-authenticated');
+  const profile=await profileFor(fbUser.uid);
+  if(!isAuthorizedProfile(profile))throw new Error('account-not-authorized');
+
+  const targetCollection = await getDoc(doc(db,'team_accounts',fbUser.uid)).then(s=>s.exists()?'team_accounts':'staff');
+  if(targetCollection==='staff'){
+    // Legacy staff collection remains protected; keep local display personalization only.
+    currentProfile={...profile,displayName:patch.displayName||profile.displayName||profile.username,minecraft:patch.minecraft||profile.minecraft||''};
+    try{localStorage.setItem('schoolcraft_profile_override_'+fbUser.uid,JSON.stringify({displayName:patch.displayName,minecraft:patch.minecraft}))}catch(e){}
+    return currentProfile;
+  }
+
+  await updateDoc(doc(db,'team_accounts',fbUser.uid),{
+    displayName:String(patch.displayName||'').trim(),
+    minecraft:String(patch.minecraft||'').trim()
+  });
+  currentProfile={...profile,displayName:String(patch.displayName||'').trim(),minecraft:String(patch.minecraft||'').trim()};
+  return currentProfile;
+}
+
+window.firebaseBridge={updateOwnProfile,login,logout,saveState,reload,getSessionState};
 
 async function createThread(data){
   const fbUser=await ensureAnonymous();
@@ -2045,6 +2327,679 @@ init();
 <div id="publicChangeModal" class="modal change-viewer hidden" onclick="if(event.target===this)closePublicChangeModal()">
   <div class="modal-card"><div id="publicChangeModalContent"></div></div>
 </div>
+
+
+
+<!-- =========================================================
+     SCHOOLCRAFT TEAM PORTAL V8.4.4 — RIGHT ACCOUNT & APPELLO ACCOUNTS
+     UI private-by-default, role-aware navigation, team settings.
+========================================================== -->
+<style id="schoolcraft-team-portal-v81">
+:root{--sc-side:270px;--sc-top:72px}
+body.sc-locked{overflow:hidden!important}
+body.sc-locked>div:not(#scAccessGate):not(#loginModal):not(#genericModal):not(#toast){filter:blur(12px);pointer-events:none;user-select:none}
+#scAccessGate{position:fixed;inset:0;z-index:99990;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(430px,.8fr);background:#050b13;color:#eef7ff;overflow:auto}
+#scAccessGate.hidden{display:none!important}
+.sc-gate-visual{position:relative;min-height:100vh;padding:70px clamp(34px,7vw,110px);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;background:radial-gradient(circle at 18% 18%,rgba(68,210,255,.18),transparent 32%),radial-gradient(circle at 78% 70%,rgba(106,82,255,.18),transparent 30%),linear-gradient(145deg,#07111f,#050b13 62%,#08101c)}
+.sc-gate-visual:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,#000,transparent 85%);pointer-events:none}
+.sc-gate-brand{position:relative;display:flex;gap:13px;align-items:center;font-weight:900;letter-spacing:-.02em}.sc-gate-mark{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(135deg,#55dcff,#7b6cff);color:#03101c;box-shadow:0 12px 40px rgba(75,209,255,.22)}
+.sc-gate-copy{position:relative;max-width:760px}.sc-gate-kicker{font-size:.72rem;text-transform:uppercase;letter-spacing:.2em;color:#59dfff;font-weight:900}.sc-gate-copy h1{font-family:"Space Grotesk",system-ui;font-size:clamp(3rem,7vw,6.7rem);line-height:.92;letter-spacing:-.065em;margin:16px 0 22px}.sc-gate-copy h1 span{background:linear-gradient(90deg,#67e3ff,#a69cff);-webkit-background-clip:text;color:transparent}.sc-gate-copy p{max-width:640px;color:#9eb1c6;font-size:1rem;line-height:1.8}.sc-gate-status{position:relative;display:flex;gap:10px;flex-wrap:wrap}.sc-gate-pill{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);border-radius:999px;padding:9px 13px;font-size:.72rem;color:#cbd8e6}.sc-gate-pill b{color:#76e6ff}
+.sc-gate-login{display:flex;align-items:center;justify-content:center;padding:48px;background:linear-gradient(180deg,#07101b,#081321)}.sc-login-card{width:min(460px,100%);border:1px solid rgba(255,255,255,.09);border-radius:28px;padding:34px;background:rgba(9,22,37,.93);box-shadow:0 34px 100px rgba(0,0,0,.45)}.sc-login-icon{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;background:rgba(75,213,255,.09);border:1px solid rgba(75,213,255,.2);font-size:1.35rem}.sc-login-card h2{font-family:"Space Grotesk";font-size:2rem;letter-spacing:-.04em;margin:18px 0 8px}.sc-login-card>p{color:#91a5bb;line-height:1.65;margin-bottom:24px}.sc-login-card .btn{width:100%;min-height:48px}.sc-security-note{display:flex;gap:10px;margin-top:18px;padding:13px;border-radius:14px;background:rgba(61,220,151,.055);border:1px solid rgba(61,220,151,.14);color:#acc9bb;font-size:.72rem;line-height:1.5}
+#scPortalChrome{display:none}body.sc-portal #scPortalChrome{display:block}.sc-private-sidebar{position:fixed;z-index:9000;left:0;top:0;bottom:0;width:var(--sc-side);padding:18px 14px;background:rgba(6,14,24,.97);border-right:1px solid rgba(255,255,255,.07);backdrop-filter:blur(18px);overflow:auto}.sc-private-logo{display:flex;align-items:center;gap:11px;padding:8px 9px 20px}.sc-private-logo .sc-gate-mark{width:39px;height:39px;border-radius:12px;font-size:.78rem}.sc-private-logo strong{display:block;font-size:.92rem}.sc-private-logo small{display:block;color:var(--muted);font-size:.62rem;margin-top:3px}.sc-nav-section{margin:15px 9px 7px;color:#64778d;font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.15em}.sc-private-nav button{width:100%;display:flex;gap:10px;align-items:center;border:0;background:transparent;color:#9eb0c3;border-radius:11px;padding:11px 12px;text-align:left;font-weight:700;font-size:.77rem;cursor:pointer;margin:2px 0}.sc-private-nav button:hover,.sc-private-nav button.active{color:#f4fbff;background:rgba(77,214,255,.075)}.sc-private-nav button.active{box-shadow:inset 2px 0 #4dd6ff}.sc-nav-badge{margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;display:grid;place-items:center;background:rgba(77,214,255,.12);color:#79e4ff;font-size:.6rem}.sc-side-profile{margin-top:22px;border-top:1px solid rgba(255,255,255,.06);padding:17px 9px 4px}.sc-side-profile strong{font-size:.78rem}.sc-side-profile small{display:block;color:var(--muted);font-size:.62rem;margin-top:3px}.sc-side-profile .btn{margin-top:10px;width:100%}
+body.sc-portal #publicView,body.sc-portal #teamView,body.sc-portal #spoilersView,body.sc-portal #forumView,body.sc-portal #rulesView,body.sc-portal #dashboardView,body.sc-portal #scPrivateHome{margin-left:var(--sc-side);min-height:100vh}body.sc-portal .topbar{left:var(--sc-side)!important;width:calc(100% - var(--sc-side))!important}body.sc-portal .topbar .brand{display:none!important}body.sc-portal #publicView .topbar .navlinks{display:none!important}
+#scPrivateHome{display:none;padding:38px;background:radial-gradient(circle at 90% 0%,rgba(77,214,255,.06),transparent 30%),#07111f}#scPrivateHome.active{display:block}.sc-home-wrap{max-width:1280px;margin:auto}.sc-home-top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:28px}.sc-home-top h1{font-family:"Space Grotesk";font-size:clamp(2rem,4vw,3.4rem);margin:8px 0 7px;letter-spacing:-.05em}.sc-home-actions{display:flex;gap:8px}.sc-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin:22px 0}.sc-kpi{border:1px solid var(--line);border-radius:17px;padding:18px;background:linear-gradient(155deg,rgba(255,255,255,.025),rgba(255,255,255,.012))}.sc-kpi small{color:var(--muted);font-size:.68rem}.sc-kpi strong{display:block;font-family:"Space Grotesk";font-size:1.7rem;margin-top:8px}.sc-home-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(310px,.6fr);gap:15px}.sc-panel-card{border:1px solid var(--line);border-radius:19px;padding:20px;background:#091726}.sc-panel-card h3{margin:0 0 16px;font-family:"Space Grotesk"}.sc-activity{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.055)}.sc-activity:last-child{border-bottom:0}.sc-activity-dot{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(77,214,255,.08);flex:none}.sc-activity strong{display:block;font-size:.77rem}.sc-activity small{display:block;color:var(--muted);font-size:.65rem;margin-top:4px;line-height:1.5}.sc-next-event{padding:18px;border-radius:16px;background:linear-gradient(135deg,rgba(77,214,255,.09),rgba(123,108,255,.07));border:1px solid rgba(77,214,255,.15)}.sc-next-event .date{font-size:.65rem;color:#72ddff;font-weight:900;text-transform:uppercase;letter-spacing:.1em}.sc-next-event h3{margin:8px 0 7px}.sc-shortcuts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}.sc-shortcut{border:1px solid var(--line);border-radius:13px;padding:13px;background:rgba(255,255,255,.018);cursor:pointer;color:var(--text);text-align:left}.sc-shortcut:hover{border-color:var(--line2);background:rgba(77,214,255,.04)}
+.sc-settings-sheet{display:grid;gap:13px}.sc-setting-row{display:flex;justify-content:space-between;gap:18px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:14px;background:rgba(255,255,255,.018)}.sc-setting-row strong{display:block;font-size:.8rem}.sc-setting-row small{display:block;color:var(--muted);font-size:.65rem;margin-top:4px;line-height:1.45}.sc-switch{position:relative;width:46px;height:26px}.sc-switch input{display:none}.sc-switch span{position:absolute;inset:0;border-radius:999px;background:#1a2b3d;border:1px solid var(--line2);transition:.2s}.sc-switch span:after{content:"";position:absolute;width:18px;height:18px;top:3px;left:4px;border-radius:50%;background:#dbe8f4;transition:.2s}.sc-switch input:checked+span{background:rgba(77,214,255,.22);border-color:#4dd6ff}.sc-switch input:checked+span:after{transform:translateX(19px);background:#74e2ff}.sc-settings-volume{width:150px}.sc-settings-modal .modal-card{max-width:720px}
+body.sc-compact .card,body.sc-compact .sc-panel-card{border-radius:12px!important}body.sc-reduced-motion *,body.sc-reduced-motion *:before,body.sc-reduced-motion *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+@media(max-width:980px){#scAccessGate{grid-template-columns:1fr}.sc-gate-visual{min-height:62vh}.sc-gate-login{padding:30px}.sc-private-sidebar{transform:translateX(-100%);transition:.22s}body.sc-mobile-nav .sc-private-sidebar{transform:none}body.sc-portal #publicView,body.sc-portal #teamView,body.sc-portal #spoilersView,body.sc-portal #forumView,body.sc-portal #rulesView,body.sc-portal #dashboardView,body.sc-portal #scPrivateHome{margin-left:0}body.sc-portal .topbar{left:0!important;width:100%!important}.sc-mobile-open{display:flex!important;position:fixed;z-index:9050;left:12px;bottom:12px}.sc-kpis{grid-template-columns:1fr 1fr}.sc-home-grid{grid-template-columns:1fr}#scPrivateHome{padding:25px 16px 80px}}
+@media(max-width:600px){.sc-gate-visual{padding:38px 22px;min-height:55vh}.sc-gate-copy h1{font-size:3rem}.sc-gate-login{padding:18px}.sc-login-card{padding:24px;border-radius:22px}.sc-kpis{grid-template-columns:1fr 1fr}.sc-home-top{display:block}.sc-home-actions{margin-top:14px}.sc-shortcuts{grid-template-columns:1fr}}
+</style>
+
+<div id="scAccessGate" class="hidden">
+  <section class="sc-gate-visual">
+    <div class="sc-gate-brand"><span class="sc-gate-mark">SC</span><div><strong>Schoolcraft</strong><div style="font-size:.64rem;color:#7f93aa;margin-top:3px">TEAM OPERATIONS PORTAL</div></div></div>
+    <div class="sc-gate-copy"><div class="sc-gate-kicker">Portale interno riservato</div><h1>Il centro operativo<br><span>del Team.</span></h1><p>Registrazioni, calendario, comunicazioni, forum, Sneak-Peak e strumenti di produzione in un unico ambiente privato dedicato esclusivamente al Team Schoolcraft.</p></div>
+    <div class="sc-gate-status"><span class="sc-gate-pill"><b>●</b> Sistema operativo</span><span class="sc-gate-pill">🔐 Accesso autenticato</span><span class="sc-gate-pill">☁ Firebase Connected</span></div>
+  </section>
+  <section class="sc-gate-login"><div class="sc-login-card"><div class="sc-login-icon">🔐</div><h2>Accesso al Team Portal</h2><p>Inserisci le credenziali autorizzate. Il contenuto interno non è disponibile agli utenti non autenticati.</p><button class="btn primary" onclick="openLogin()">Accedi al portale</button><div class="sc-security-note"><span>🛡️</span><span><strong>Area riservata.</strong><br>Utilizza esclusivamente il tuo account personale Schoolcraft.</span></div></div></section>
+</div>
+
+<div id="scPortalChrome">
+  <aside class="sc-private-sidebar">
+    <div class="sc-private-logo"><span class="sc-gate-mark">SC</span><div><strong>Schoolcraft</strong><small>Team Operations</small></div></div>
+    <div class="sc-private-nav" id="scPrivateNav">
+      <div class="sc-nav-section">Workspace</div>
+      <button data-scnav="home" onclick="scOpenHome()">⌂ Panoramica</button>
+      <button data-scnav="calendar" onclick="scOpenPublicSection('calendario')">▦ Calendario</button>
+      <button data-scnav="team" onclick="showTeam();scSetActive('team')">♟ Team</button>
+      <button data-scnav="forum" onclick="showForum();scSetActive('forum')">💬 Forum <span class="sc-nav-badge" id="scForumBadge">0</span></button>
+      <button data-scnav="spoilers" onclick="showSpoilers();scSetActive('spoilers')">◈ Sneak-Peak</button>
+      <button data-scnav="rules" onclick="showRulesPage();scSetActive('rules')">☷ Regolamento</button>
+      <div class="sc-nav-section">Personale</div>
+      <button data-scnav="profile" onclick="scOpenProfile()">👤 Il mio profilo</button>
+      <button data-scnav="notifications" onclick="scOpenNotifications()">🔔 Notifiche <span class="sc-nav-badge" id="scNotifBadge">0</span></button>
+      <button data-scnav="settings" onclick="scOpenSettings()">⚙ Impostazioni</button>
+      <div id="scAdminNav"></div>
+    </div>
+    <div class="sc-side-profile"><strong id="scSideName">Account</strong><small id="scSideRole">Team Member</small><button class="btn small" onclick="logout()">↪ Disconnetti</button></div>
+  </aside>
+  <button class="btn primary sc-mobile-open" style="display:none" onclick="document.body.classList.toggle('sc-mobile-nav')">☰ Menu</button>
+</div>
+
+<section id="scPrivateHome">
+  <div class="sc-home-wrap">
+    <div class="sc-home-top"><div><div class="eyebrow">Schoolcraft Team Portal</div><h1 id="scWelcome">Bentornato.</h1><p class="muted">La tua area personale per registrazioni, comunicazioni, Forum e attività del Team.</p></div><div class="sc-home-actions"><button class="btn" onclick="scOpenSettings()">⚙ Impostazioni</button><button class="btn primary" onclick="scOpenPublicSection('calendario')">Prossima registrazione →</button></div></div>
+    <div class="sc-kpis"><div class="sc-kpi"><small>Membri Team</small><strong id="scKpiMembers">0</strong></div><div class="sc-kpi"><small>Prossimi eventi</small><strong id="scKpiEvents">0</strong></div><div class="sc-kpi"><small>Comunicazioni</small><strong id="scKpiChanges">0</strong></div><div class="sc-kpi"><small>Discussioni Forum</small><strong id="scKpiThreads">0</strong></div></div>
+    <div class="sc-home-grid"><div class="sc-panel-card"><h3>Attività recenti</h3><div id="scRecentActivity"></div></div><div><div class="sc-panel-card"><h3>Prossimo impegno</h3><div id="scNextEvent"></div></div><div class="sc-panel-card" style="margin-top:15px"><h3>Accesso rapido</h3><div class="sc-shortcuts"><button class="sc-shortcut" onclick="showForum();scSetActive('forum')">💬<br><strong>Forum</strong></button><button class="sc-shortcut" onclick="showSpoilers();scSetActive('spoilers')">◈<br><strong>Sneak-Peak</strong></button><button class="sc-shortcut" onclick="showTeam();scSetActive('team')">♟<br><strong>Team</strong></button><button class="sc-shortcut" onclick="scOpenSettings()">⚙<br><strong>Impostazioni</strong></button></div></div></div></div>
+  </div>
+</section>
+
+
+
+
+
+
+
+
+
+<style id="schoolcraft-v844-header-alignment">
+/* Forum + Sneak-Peak: Sito/Freccia a sinistra, account Team sempre a destra */
+#forumView .topbar,
+#spoilerView .topbar,
+#forumView .nav,
+#spoilerView .nav,
+#forumView header,
+#spoilerView header{
+  display:flex!important;
+  align-items:center!important;
+}
+#forumView .topbar .sc-account-wrap,
+#spoilerView .topbar .sc-account-wrap,
+#forumView .nav .sc-account-wrap,
+#spoilerView .nav .sc-account-wrap,
+#forumView header .sc-account-wrap,
+#spoilerView header .sc-account-wrap,
+#forumView .account-wrap,
+#spoilerView .account-wrap{
+  margin-left:auto!important;
+  order:99!important;
+}
+#forumView .back-site,
+#spoilerView .back-site,
+#forumView [onclick*="showHome"],
+#spoilerView [onclick*="showHome"],
+#forumView [onclick*="showPublic"],
+#spoilerView [onclick*="showPublic"]{
+  order:0!important;
+  margin-right:auto!important;
+}
+</style>
+
+<style id="schoolcraft-v843-no-double-login">
+body.sc-team-authenticated #communityProfileBar,
+body.sc-team-authenticated #spoilerCommunityProfileBar,
+body.sc-team-authenticated .forum-access-btn,
+body.sc-team-authenticated .community-login-note button[onclick*="openForumLogin"]{
+  display:none!important;
+}
+</style>
+
+<style id="schoolcraft-v842-single-login">
+/* Un solo account Team in tutto il portale */
+body.sc-team-authenticated .community-login-btn,
+body.sc-team-authenticated .forum-login-btn,
+body.sc-team-authenticated [data-community-login],
+body.sc-team-authenticated [onclick*="openCommunityLogin"],
+body.sc-team-authenticated [onclick*="communityLogin"],
+body.sc-team-authenticated [onclick*="showCommunityLogin"]{
+  display:none!important;
+}
+/* evita doppioni del box account nelle barre */
+body.sc-team-authenticated .sc-account-wrap + .sc-account-wrap{display:none!important}
+</style>
+
+<style id="schoolcraft-v84-chat-scroll">
+/* V8.4 — Chat stile WhatsApp con cronologia realmente scorrevole */
+.thread-chat-shell,
+.forum-chat-shell,
+.chat-shell,
+#threadDetail .thread-chat,
+#threadDetail .chat-messages,
+#forumThreadDetail .thread-chat,
+#forumThreadDetail .chat-messages{
+  display:flex!important;
+  flex-direction:column!important;
+  min-height:0!important;
+}
+
+.sc-chat-scroll,
+.thread-messages,
+.chat-messages,
+.forum-messages,
+#threadMessages,
+#forumMessages{
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  scroll-behavior:smooth;
+  -webkit-overflow-scrolling:touch;
+  min-height:220px;
+  max-height:min(62vh,720px);
+  padding-right:7px;
+}
+
+.sc-chat-scroll::-webkit-scrollbar,
+.thread-messages::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar,
+.forum-messages::-webkit-scrollbar,
+#threadMessages::-webkit-scrollbar,
+#forumMessages::-webkit-scrollbar{
+  width:9px;
+}
+.sc-chat-scroll::-webkit-scrollbar-track,
+.thread-messages::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track,
+.forum-messages::-webkit-scrollbar-track,
+#threadMessages::-webkit-scrollbar-track,
+#forumMessages::-webkit-scrollbar-track{
+  background:rgba(255,255,255,.025);
+  border-radius:999px;
+}
+.sc-chat-scroll::-webkit-scrollbar-thumb,
+.thread-messages::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb,
+.forum-messages::-webkit-scrollbar-thumb,
+#threadMessages::-webkit-scrollbar-thumb,
+#forumMessages::-webkit-scrollbar-thumb{
+  background:rgba(89,214,255,.25);
+  border-radius:999px;
+}
+.sc-chat-scroll::-webkit-scrollbar-thumb:hover,
+.thread-messages::-webkit-scrollbar-thumb:hover,
+.chat-messages::-webkit-scrollbar-thumb:hover,
+.forum-messages::-webkit-scrollbar-thumb:hover,
+#threadMessages::-webkit-scrollbar-thumb:hover,
+#forumMessages::-webkit-scrollbar-thumb:hover{
+  background:rgba(89,214,255,.38);
+}
+
+.sc-chat-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin:0 0 10px;
+  padding:9px 11px;
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:12px;
+  background:rgba(255,255,255,.025);
+}
+.sc-chat-toolbar small{color:#8298ad;font-size:.62rem}
+.sc-chat-jump{
+  border:1px solid rgba(87,218,255,.18);
+  background:rgba(87,218,255,.06);
+  color:#dff8ff;
+  border-radius:10px;
+  padding:7px 10px;
+  font-size:.64rem;
+  font-weight:800;
+  cursor:pointer;
+}
+.sc-chat-jump:hover{background:rgba(87,218,255,.11)}
+
+.sc-chat-bottom-indicator{
+  position:sticky;
+  bottom:74px;
+  margin-left:auto;
+  width:max-content;
+  z-index:5;
+  pointer-events:none;
+}
+.sc-chat-bottom-indicator button{
+  pointer-events:auto;
+  border:1px solid rgba(87,218,255,.2);
+  background:rgba(8,18,28,.94);
+  color:#e8fbff;
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:.63rem;
+  font-weight:900;
+  box-shadow:0 8px 28px rgba(0,0,0,.28);
+  cursor:pointer;
+}
+
+.thread-composer,
+.forum-composer,
+.chat-composer,
+#threadComposer{
+  position:sticky!important;
+  bottom:0!important;
+  z-index:8!important;
+  background:rgba(7,13,21,.96)!important;
+  backdrop-filter:blur(18px);
+  border-top:1px solid rgba(255,255,255,.07)!important;
+}
+
+@media(max-width:760px){
+  .sc-chat-scroll,
+  .thread-messages,
+  .chat-messages,
+  .forum-messages,
+  #threadMessages,
+  #forumMessages{
+    max-height:58vh;
+    min-height:260px;
+  }
+}
+</style>
+
+<style id="schoolcraft-v83-account-login-forum">
+.sc-login-options{margin:10px 0 2px}
+.sc-remember-row{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid rgba(255,255,255,.08);border-radius:13px;background:rgba(255,255,255,.025);cursor:pointer}
+.sc-remember-row input{margin-top:2px;accent-color:#57ddff}
+.sc-remember-row span{display:block}.sc-remember-row strong{display:block;font-size:.72rem}.sc-remember-row small{display:block;margin-top:3px;color:#8197ad;font-size:.62rem;line-height:1.4}
+.sc-account-wrap{position:relative;margin-left:auto!important;display:flex;justify-content:flex-end;align-items:center}
+.sc-account-head{width:30px;height:30px;border-radius:7px;image-rendering:pixelated;border:1px solid rgba(99,222,255,.22);box-shadow:0 0 16px rgba(76,213,255,.08)}
+.sc-account-fallback{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;background:rgba(77,214,255,.08);border:1px solid rgba(99,222,255,.18)}
+.account-trigger{margin-left:auto!important}
+.topbar .account-wrap,.topbar-right,.nav-actions,.header-actions,.public-nav .account-wrap{margin-left:auto!important}
+#publicView .topbar>div:last-child,#publicView .nav>div:last-child,#publicView header>div:last-child{margin-left:auto!important}
+.sc-profile-avatar.sc-mc-avatar{overflow:hidden;padding:0}.sc-profile-avatar.sc-mc-avatar img{width:100%;height:100%;object-fit:cover;image-rendering:pixelated}
+@media(max-width:760px){.sc-account-wrap{margin-left:auto!important}.account-meta small{display:none}}
+</style>
+
+<style id="schoolcraft-v82-settings-and-dashboard">
+:root{--sc-ui-scale:1}
+body.sc-large-text{font-size:calc(16px * var(--sc-ui-scale))}
+body.sc-compact .sc-panel-card{padding:14px!important}
+body.sc-compact .sc-home-grid{gap:10px!important}
+body.sc-compact .sc-kpi{padding:12px!important}
+body.sc-compact .sc-private-sidebar button{padding:8px 10px!important}
+body.sc-reduced-motion *,body.sc-reduced-motion *::before,body.sc-reduced-motion *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+body.sc-high-contrast{--muted:#d2dfeb!important;--line:rgba(255,255,255,.23)!important}
+body.sc-high-contrast .muted,body.sc-high-contrast small{color:#c9d8e7!important}
+body.sc-high-contrast .sc-panel-card,body.sc-high-contrast .card{border-color:rgba(255,255,255,.22)!important}
+body.sc-soft-glow-off .sc-panel-card,body.sc-soft-glow-off .card,body.sc-soft-glow-off .sc-private-sidebar{box-shadow:none!important}
+.sc-settings-preview{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid rgba(77,214,255,.13);border-radius:14px;background:rgba(77,214,255,.035);margin-bottom:12px}
+.sc-settings-preview strong{font-size:.75rem}.sc-settings-preview small{display:block;color:#8298ad;font-size:.63rem;margin-top:3px}
+.sc-volume-value{min-width:38px;text-align:right;color:#5ee2ff;font-weight:900;font-size:.72rem}
+.sc-profile-hero{display:grid;grid-template-columns:82px 1fr;gap:18px;align-items:center;padding:18px;border:1px solid rgba(77,214,255,.13);border-radius:18px;background:linear-gradient(135deg,rgba(77,214,255,.07),rgba(143,92,255,.04))}
+.sc-profile-avatar{width:82px;height:82px;border-radius:20px;display:grid;place-items:center;font-size:2rem;font-weight:1000;background:linear-gradient(135deg,#13344c,#192445);border:1px solid rgba(111,224,255,.2)}
+.sc-profile-meta h3{margin:0 0 4px;font-size:1.15rem}.sc-profile-meta p{margin:0;color:#8fa5bb;font-size:.72rem}
+.sc-profile-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.sc-personal-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.sc-personal-stat{padding:13px;border:1px solid rgba(255,255,255,.07);border-radius:13px;background:rgba(255,255,255,.025)}
+.sc-personal-stat span{display:block;color:#71879c;font-size:.59rem;text-transform:uppercase;letter-spacing:.08em}.sc-personal-stat strong{display:block;margin-top:5px;font-size:.8rem}
+.sc-settings-actions{position:sticky;bottom:-18px;margin:18px -18px -18px;padding:12px 18px;background:rgba(7,13,21,.96);border-top:1px solid rgba(255,255,255,.07);display:flex;justify-content:flex-end;gap:8px;backdrop-filter:blur(16px)}
+@media(max-width:700px){.sc-personal-grid{grid-template-columns:1fr}.sc-profile-hero{grid-template-columns:64px 1fr}.sc-profile-avatar{width:64px;height:64px}}
+</style>
+
+<style id="schoolcraft-v811-login-layer-fix">
+/* V8.1.1 FIX — Login/modal sempre sopra al private access gate */
+#loginModal{z-index:100500!important}
+#genericModal{z-index:100400!important}
+#toast{z-index:100600!important}
+</style>
+
+<style id="schoolcraft-team-portal-v81-extra">
+.sc-settings-section-title{margin:20px 0 8px;color:#6f879e;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.16em}
+.sc-account-summary{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 0 18px}
+.sc-account-summary>div{padding:12px;border:1px solid rgba(255,255,255,.07);border-radius:12px;background:rgba(255,255,255,.025)}
+.sc-account-summary span{display:block;color:#71869c;font-size:.62rem;margin-bottom:4px}.sc-account-summary strong{font-size:.76rem}
+.sc-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+.sc-notification-list{display:grid;gap:8px}.sc-notification{position:relative;width:100%;display:grid;grid-template-columns:42px 1fr auto;gap:10px;align-items:center;text-align:left;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:13px;background:rgba(255,255,255,.035);color:#eaf5ff;cursor:pointer}
+.sc-notification:hover{background:rgba(77,214,255,.065);border-color:rgba(77,214,255,.18)}.sc-notification.read{opacity:.68}.sc-notification-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:rgba(77,214,255,.08)}
+.sc-notification small,.sc-notification strong,.sc-notification em{display:block}.sc-notification small{color:#61dfff;font-size:.58rem;text-transform:uppercase;letter-spacing:.1em}.sc-notification strong{font-size:.78rem;margin:3px 0}.sc-notification em{font-style:normal;color:#8fa5bb;font-size:.68rem;line-height:1.45}
+.sc-unread-dot{width:8px;height:8px;border-radius:50%;background:#55dcff;box-shadow:0 0 14px rgba(85,220,255,.8)}
+body.sc-high-contrast{--muted:#b8c8d8;--line:rgba(255,255,255,.16)}
+body.sc-high-contrast .muted{color:#b8c8d8!important}
+body.sc-high-contrast .sc-private-sidebar{border-right-color:rgba(255,255,255,.15)}
+@media(max-width:700px){.sc-account-summary{grid-template-columns:1fr}.sc-notification{grid-template-columns:38px 1fr auto}}
+</style>
+
+<script id="schoolcraft-team-portal-v81-script">
+(function(){
+const PREFKEY='schoolcraft_team_preferences_v83';
+const LOGINPREFKEY='schoolcraft_team_login_pref_v83';
+const NOTIFKEY='schoolcraft_team_notifications_v81';
+function loginPrefs(){try{return JSON.parse(localStorage.getItem(LOGINPREFKEY)||'{}')}catch{return{}}}
+function saveLoginPrefs(v){try{localStorage.setItem(LOGINPREFKEY,JSON.stringify(v))}catch(e){}}
+function prefs(){try{return JSON.parse(localStorage.getItem(PREFKEY)||'{}')}catch{return{}}}
+function savePrefs(v){localStorage.setItem(PREFKEY,JSON.stringify(v));applyPrefs()}
+function notifState(){try{return JSON.parse(localStorage.getItem(NOTIFKEY)||'{"read":[]}')}catch{return{read:[]}}}
+function setNotifState(v){localStorage.setItem(NOTIFKEY,JSON.stringify(v))}
+function isAdmin(){return !!user&&['owner','admin'].includes(user.permission)}
+function applyPrefs(){
+  const p=prefs();
+  document.body.classList.toggle('sc-compact',!!p.compact);
+  document.body.classList.toggle('sc-reduced-motion',!!p.reducedMotion);
+  document.body.classList.toggle('sc-high-contrast',!!p.highContrast);
+  document.body.classList.toggle('sc-soft-glow-off',p.glow===false);
+  const scale=Math.max(.9,Math.min(1.18,Number(p.textScale)||1));
+  document.documentElement.style.setProperty('--sc-ui-scale',String(scale));
+  document.body.style.fontSize=`calc(16px * ${scale})`;
+
+  if(typeof scAudioState!=='undefined'){
+    if(typeof p.audio==='boolean')scAudioState.enabled=p.audio;
+    if(Number.isFinite(+p.volume))scAudioState.volume=Math.max(0,Math.min(1,+p.volume/100));
+    try{localStorage.setItem('schoolcraft_audio_v1',JSON.stringify(scAudioState))}catch(e){}
+    if(typeof state!=='undefined'&&state.settings){
+      state.settings.sound=scAudioState.enabled;
+      state.settings.volume=Math.round(scAudioState.volume*100);
+    }
+  }
+}
+function scNotifications(){
+  if(!user)return[];
+  const p=prefs(), items=[];
+  const now=Date.now();
+  const events=(state.events||[]).filter(e=>new Date(e.date).getTime()>=now).sort((a,b)=>new Date(a.date)-new Date(b.date)).slice(0,6);
+  if(p.eventNotifications!==false)events.forEach(e=>items.push({
+    id:'event:'+e.id,
+    icon:'📅',
+    type:'Evento',
+    title:e.title||'Nuovo evento',
+    text:`${e.category||'Attività'} · ${fmtDate(e.date)}`,
+    date:e.date,
+    action:"scOpenPublicSection('calendario')"
+  }));
+  const changes=(state.changes||[]).filter(c=>c.published!==false).slice(0,6);
+  if(p.announcementNotifications!==false)changes.forEach(c=>items.push({
+    id:'change:'+c.id,
+    icon:'📢',
+    type:'Comunicazione',
+    title:c.title||'Comunicazione della Direzione',
+    text:(c.text||c.description||'Nuova comunicazione interna.').slice(0,150),
+    date:c.date,
+    action:`openPublicChangeModal('${c.id}')`
+  }));
+  const threadCount=[...(state.forumPublic||[]),...(state.forumPrivate||[])].length;
+  if(p.forumNotifications!==false && threadCount)items.push({
+    id:'forum:summary:'+threadCount,
+    icon:'💬',
+    type:'Forum',
+    title:`${threadCount} discussioni disponibili`,
+    text:'Apri il Forum interno del Team.',
+    date:new Date().toISOString(),
+    action:"showForum();scSetActive('forum')"
+  });
+  return items.sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,14);
+}
+function unreadNotifications(){
+  const read=new Set(notifState().read||[]);
+  return scNotifications().filter(n=>!read.has(n.id));
+}
+function updateNotifBadge(){
+  const el=document.getElementById('scNotifBadge');
+  if(el)el.textContent=Math.min(99,unreadNotifications().length);
+}
+window.scSetActive=function(k){
+  document.querySelectorAll('[data-scnav]').forEach(b=>b.classList.toggle('active',b.dataset.scnav===k));
+  document.body.classList.remove('sc-mobile-nav')
+}
+window.scOpenHome=function(){
+  if(!user)return scSyncAccess();
+  hideViews();
+  document.getElementById('scPrivateHome').classList.add('active');
+  scSetActive('home');
+  scRenderHome();
+  scrollTo(0,0)
+}
+window.scOpenPublicSection=function(id){
+  if(!user)return scSyncAccess();
+  document.getElementById('scPrivateHome').classList.remove('active');
+  showPublic();
+  scSetActive('calendar');
+  setTimeout(()=>document.getElementById(id)?.scrollIntoView({behavior:document.body.classList.contains('sc-reduced-motion')?'auto':'smooth'}),80)
+}
+window.scOpenNotifications=function(){
+  if(!user)return scSyncAccess();
+  const list=scNotifications(), read=new Set(notifState().read||[]);
+  openGeneric('Centro notifiche',`
+    <div class="sc-settings-sheet">
+      <div class="notice"><strong>${unreadNotifications().length} non lette</strong> · aggiornamenti personali ricavati da calendario, comunicazioni e Forum.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px">
+        <button class="btn small" onclick="scMarkAllNotificationsRead()">Segna tutto come letto</button>
+      </div>
+      <div class="sc-notification-list">
+        ${list.length?list.map(n=>`
+          <button class="sc-notification ${read.has(n.id)?'read':''}" onclick="scOpenNotification('${n.id}')">
+            <span class="sc-notification-icon">${n.icon}</span>
+            <span><small>${esc(n.type)}</small><strong>${esc(n.title)}</strong><em>${esc(n.text)}</em></span>
+            ${read.has(n.id)?'':'<b class="sc-unread-dot"></b>'}
+          </button>`).join(''):'<div class="empty">Nessuna notifica disponibile.</div>'}
+      </div>
+    </div>`);
+  document.getElementById('genericModal')?.classList.add('sc-settings-modal');
+  scSetActive('notifications');
+}
+window.scOpenNotification=function(id){
+  const n=scNotifications().find(x=>x.id===id);
+  if(!n)return;
+  const s=notifState(), set=new Set(s.read||[]);set.add(id);s.read=[...set].slice(-200);setNotifState(s);
+  updateNotifBadge();
+  closeModal('genericModal');
+  try{Function(n.action)()}catch(e){console.error(e)}
+}
+window.scMarkAllNotificationsRead=function(){
+  const s=notifState();s.read=scNotifications().map(x=>x.id);setNotifState(s);updateNotifBadge();scOpenNotifications()
+}
+window.scMinecraftHeadUrl=function(nick,size=64){
+  const n=String(nick||'').trim();
+  return n ? `https://mc-heads.net/avatar/${encodeURIComponent(n)}/${size}` : '';
+}
+window.scOpenProfile=function(){
+  if(!user)return scSyncAccess();
+  const events=futureEvents?futureEvents():[];
+  const threads=[...(state.forumPublic||[]),...(state.forumPrivate||[])];
+  const head=scMinecraftHeadUrl(user.minecraft||'',96);
+  openGeneric('Il mio profilo',`
+    <div class="sc-settings-sheet">
+      <div class="sc-profile-hero">
+        <div class="sc-profile-avatar sc-mc-avatar">
+          ${head?`<img src="${head}" alt="Testa Minecraft" onerror="this.style.display='none';this.parentElement.textContent='👤'">`:'👤'}
+        </div>
+        <div class="sc-profile-meta">
+          <div class="eyebrow">Account Team verificato</div>
+          <h3>${esc(user.name||'Team Member')}</h3>
+          <p>${esc(user.role||'Team Member')}${user.minecraft?` · Minecraft: ${esc(user.minecraft)}`:''}</p>
+          <div class="sc-profile-tags"><span class="tag">${esc(user.permission||'member')}</span><span class="status present">ATTIVO</span></div>
+        </div>
+      </div>
+
+      <div class="sc-personal-grid">
+        <div class="sc-personal-stat"><span>Prossimi eventi</span><strong>${events.length}</strong></div>
+        <div class="sc-personal-stat"><span>Notifiche non lette</span><strong>${unreadNotifications().length}</strong></div>
+        <div class="sc-personal-stat"><span>Forum interno</span><strong>${threads.length} discussioni</strong></div>
+      </div>
+
+      <div class="sc-settings-section-title">Profilo personale</div>
+      <div class="field">
+        <label>Nome visualizzato</label>
+        <input id="scProfileDisplayName" class="input" maxlength="32" value="${esc(user.name||'')}" placeholder="Come vuoi essere chiamato nel portale">
+      </div>
+      <div class="field">
+        <label>Nickname / Skin Minecraft</label>
+        <input id="scProfileMinecraft" class="input" maxlength="32" value="${esc(user.minecraft||'')}" placeholder="Il tuo nickname Minecraft">
+      </div>
+      <div class="notice">Il nome visualizzato è personale e non cambia il tuo ruolo o i permessi. Il nickname Minecraft serve per mostrare automaticamente la tua testa/skin vicino al nome.</div>
+      <button class="btn primary" onclick="scSaveProfile()">Salva profilo</button>
+    </div>`);
+  scSetActive('profile');
+}
+window.scSaveProfile=async function(){
+  if(!user)return;
+  const displayName=(document.getElementById('scProfileDisplayName')?.value||'').trim();
+  const minecraft=(document.getElementById('scProfileMinecraft')?.value||'').trim();
+  if(displayName.length<2){toast('Inserisci un nome di almeno 2 caratteri');return}
+  try{
+    if(window.firebaseBridge?.updateOwnProfile){
+      const profile=await window.firebaseBridge.updateOwnProfile({displayName,minecraft});
+      user.name=profile.displayName||profile.username||displayName;
+      user.minecraft=profile.minecraft||minecraft;
+    }else{
+      user.name=displayName;
+      user.minecraft=minecraft;
+    }
+    saveSession();
+    renderAccounts();
+    scRenderHome();
+    closeModal('genericModal');
+    toast('Profilo aggiornato');
+  }catch(e){
+    console.error(e);
+    toast('Non riesco a salvare il profilo su Firebase');
+  }
+}
+window.scOpenSettings=function(){
+  if(!user)return scSyncAccess();
+  const p=prefs();
+  const vol=Number.isFinite(+p.volume)?+p.volume:Math.round((typeof scAudioState!=='undefined'?scAudioState.volume:.65)*100);
+  const scale=Math.round((Number(p.textScale)||1)*100);
+  openGeneric('Impostazioni personali',`
+    <div class="sc-settings-sheet">
+      <div class="sc-settings-preview">
+        <div><strong>Preferenze di ${esc(user.name||'Team Member')}</strong><small>Le modifiche vengono applicate subito dopo il salvataggio.</small></div>
+        <span class="status present">PERSONALI</span>
+      </div>
+
+      <div class="sc-settings-section-title">Audio</div>
+      <div class="sc-setting-row"><div><strong>Audio interfaccia</strong><small>Attiva o disattiva i suoni del portale.</small></div><label class="sc-switch"><input id="scpAudio" type="checkbox" ${p.audio!==false?'checked':''}><span></span></label></div>
+      <div class="sc-setting-row"><div><strong>Volume effetti</strong><small>Regola il volume dei feedback sonori.</small></div><div style="display:flex;align-items:center;gap:10px"><input id="scpVolume" class="sc-settings-volume" type="range" min="0" max="100" value="${vol}" oninput="document.getElementById('scpVolumeValue').textContent=this.value+'%'"><b id="scpVolumeValue" class="sc-volume-value">${vol}%</b></div></div>
+
+      <div class="sc-settings-section-title">Aspetto & accessibilità</div>
+      <div class="sc-setting-row"><div><strong>Interfaccia compatta</strong><small>Riduce spaziature e dimensione delle card.</small></div><label class="sc-switch"><input id="scpCompact" type="checkbox" ${p.compact?'checked':''}><span></span></label></div>
+      <div class="sc-setting-row"><div><strong>Riduci animazioni</strong><small>Disattiva quasi tutte le transizioni.</small></div><label class="sc-switch"><input id="scpMotion" type="checkbox" ${p.reducedMotion?'checked':''}><span></span></label></div>
+      <div class="sc-setting-row"><div><strong>Contrasto elevato</strong><small>Rende testi e bordi più leggibili.</small></div><label class="sc-switch"><input id="scpContrast" type="checkbox" ${p.highContrast?'checked':''}><span></span></label></div>
+      <div class="sc-setting-row"><div><strong>Effetti luminosi</strong><small>Glow e ombre decorative dell'interfaccia.</small></div><label class="sc-switch"><input id="scpGlow" type="checkbox" ${p.glow!==false?'checked':''}><span></span></label></div>
+      <div class="sc-setting-row"><div><strong>Dimensione testo</strong><small>Scala personale dell'interfaccia.</small></div><div style="display:flex;align-items:center;gap:10px"><input id="scpTextScale" class="sc-settings-volume" type="range" min="90" max="118" value="${scale}" oninput="document.getElementById('scpScaleValue').textContent=this.value+'%'"><b id="scpScaleValue" class="sc-volume-value">${scale}%</b></div></div>
+
+      <div class="sc-settings-section-title">Notifiche</div>
+      <div class="sc-setting-row"><div><strong>Calendario & registrazioni</strong><small>Avvisi per i prossimi impegni.</small></div><label class="sc-switch"><input id="scpNotifEvents" type="checkbox" ${p.eventNotifications!==false?'checked':''}><span></span></label></div>
+      <div class="sc-setting-row"><div><strong>Comunicazioni Direzione</strong><small>Avvisi per annunci e aggiornamenti interni.</small></div><label class="sc-switch"><input id="scpNotifAnnouncements" type="checkbox" ${p.announcementNotifications!==false?'checked':''}><span></span></label></div>
+      <div class="sc-setting-row"><div><strong>Forum</strong><small>Mostra attività e riepiloghi del Forum.</small></div><label class="sc-switch"><input id="scpNotifForum" type="checkbox" ${p.forumNotifications!==false?'checked':''}><span></span></label></div>
+
+      <div class="sc-settings-section-title">Account</div>
+      <div class="sc-account-summary">
+        <div><span>Nome</span><strong>${esc(user.name||'—')}</strong></div>
+        <div><span>Ruolo</span><strong>${esc(user.role||'Team Member')}</strong></div>
+        <div><span>Permesso</span><strong>${esc(user.permission||'member')}</strong></div>
+        <div><span>Sessione</span><strong>Firebase verificata</strong></div>
+      </div>
+      <div class="sc-settings-actions"><button class="btn" onclick="scResetSettings()">Ripristina</button><button class="btn primary" onclick="scSaveSettings()">Salva impostazioni</button></div>
+    </div>`);
+  document.getElementById('genericModal')?.classList.add('sc-settings-modal');
+  scSetActive('settings')
+}
+window.scSaveSettings=function(){
+  const v={
+    audio:document.getElementById('scpAudio')?.checked!==false,
+    volume:+(document.getElementById('scpVolume')?.value||65),
+    compact:!!document.getElementById('scpCompact')?.checked,
+    reducedMotion:!!document.getElementById('scpMotion')?.checked,
+    highContrast:!!document.getElementById('scpContrast')?.checked,
+    glow:document.getElementById('scpGlow')?.checked!==false,
+    textScale:+(document.getElementById('scpTextScale')?.value||100)/100,
+    eventNotifications:document.getElementById('scpNotifEvents')?.checked!==false,
+    announcementNotifications:document.getElementById('scpNotifAnnouncements')?.checked!==false,
+    forumNotifications:document.getElementById('scpNotifForum')?.checked!==false
+  };
+  savePrefs(v);
+  updateNotifBadge();
+  if(v.audio&&typeof scSound==='function')setTimeout(()=>scSound('success'),40);
+  closeModal('genericModal');
+  toast('Impostazioni applicate e salvate')
+}
+window.scResetSettings=function(){
+  if(!confirm('Ripristinare le impostazioni personali predefinite?'))return;
+  localStorage.removeItem(PREFKEY);
+  applyPrefs();
+  closeModal('genericModal');
+  updateNotifBadge();
+  toast('Impostazioni ripristinate')
+}
+window.scRenderHome=function(){
+  if(!user)return;
+  document.getElementById('scWelcome').textContent=`Bentornato, ${user.name||'Team Member'}.`;
+  document.getElementById('scSideName').textContent=user.name||'Account';
+  document.getElementById('scSideRole').textContent=user.role||'Team Member';
+
+  const members=state.members||[],events=futureEvents?futureEvents():[],changes=(state.changes||[]).filter(x=>x.published!==false),threads=[...(state.forumPublic||[]),...(state.forumPrivate||[])];
+  document.getElementById('scKpiMembers').textContent=members.length;
+  document.getElementById('scKpiEvents').textContent=events.length;
+  document.getElementById('scKpiChanges').textContent=changes.length;
+  document.getElementById('scKpiThreads').textContent=threads.length;
+  document.getElementById('scForumBadge').textContent=Math.min(99,threads.length);
+  updateNotifBadge();
+
+  const recent=changes.slice(0,4);
+  document.getElementById('scRecentActivity').innerHTML=recent.length?recent.map(c=>`<div class="sc-activity"><div class="sc-activity-dot">📢</div><div><strong>${esc(c.title||'Comunicazione')}</strong><small>${fmtLocalDate(c.date)||''}${c.description?' · '+esc(String(c.description).slice(0,110)):''}</small></div></div>`).join(''):'<div class="empty">Nessuna attività recente.</div>';
+  const n=events[0];
+  document.getElementById('scNextEvent').innerHTML=n?`<div class="sc-next-event"><div class="date">${fmtDate(n.date)}</div><h3>${esc(n.title||'Registrazione')}</h3><p class="muted" style="font-size:.72rem;line-height:1.55">${esc(n.description||'Attività programmata dal Team.')}</p><button class="btn small primary" onclick="scOpenPublicSection('calendario')">Apri calendario</button></div>`:'<div class="empty">Nessun impegno programmato.</div>';
+
+  document.getElementById('scAdminNav').innerHTML=isAdmin()?`<div class="sc-nav-section">Amministrazione</div><button onclick="enterDashboard();scSetActive('admin')">▣ Pannello Staff</button><button onclick="showTeamAdmin();scSetActive('manage')">♟ Gestione Team</button>`:'';
+}
+window.scSyncAccess=function(){
+  const gate=document.getElementById('scAccessGate');
+  const valid=!!user && window.__firebaseTeamSession===true;
+  if(valid){
+    document.body.classList.remove('sc-locked');
+    document.body.classList.add('sc-portal');
+    gate.classList.add('hidden');
+    scRenderHome();
+    if(!document.querySelector('#scPrivateHome.active')&&['publicView','teamView','spoilersView','forumView','rulesView','dashboardView'].every(id=>document.getElementById(id)?.classList.contains('hidden')))scOpenHome()
+  }else{
+    document.body.classList.add('sc-locked');
+    document.body.classList.remove('sc-portal');
+    gate.classList.remove('hidden');
+    document.getElementById('scPrivateHome').classList.remove('active')
+  }
+}
+const oldRenderAll=window.renderAll;
+if(typeof oldRenderAll==='function'){
+  window.renderAll=function(){
+    const r=oldRenderAll.apply(this,arguments);
+    setTimeout(()=>{scSyncAccess();if(user)scRenderHome()},0);
+    return r
+  }
+}
+const oldShowPublic=window.showPublic;
+if(typeof oldShowPublic==='function'){
+  window.showPublic=function(){
+    if(!user||window.__firebaseTeamSession!==true){scSyncAccess();return}
+    document.getElementById('scPrivateHome').classList.remove('active');
+    return oldShowPublic.apply(this,arguments)
+  }
+}
+const oldLogout=window.logout;
+if(typeof oldLogout==='function'){
+  window.logout=async function(){await oldLogout.apply(this,arguments);scSyncAccess()}
+}
+const oldTeamCb=window.onFirebaseTeamSession;
+window.onFirebaseTeamSession=function(valid,profile){
+  setTimeout(scSyncSingleTeamLoginUI,0);
+  oldTeamCb?.(valid,profile);
+  setTimeout(()=>{
+    scSyncAccess();
+    if(valid)scOpenHome()
+  },30)
+}
+function tuneLogin(){
+  try{
+    const lp=loginPrefs();
+    const cb=document.getElementById('loginRemember');
+    if(cb)cb.checked=lp.remember!==false;
+  }catch(e){}
+  const h=document.querySelector('#loginModal h2');if(h)h.textContent='Accesso Team Portal';
+  const eye=document.querySelector('#loginModal .eyebrow');if(eye)eye.textContent='Schoolcraft · Area riservata';
+  const note=document.querySelector('#loginModal .notice');if(note)note.innerHTML='🔐 Accesso protetto da Firebase Authentication. Team, Staff, Owner e Amministratori utilizzano account personali.';
+  const btn=document.querySelector('#loginModal .btn.primary');if(btn)btn.textContent='Entra nel portale'
+}
+applyPrefs();tuneLogin();
+setTimeout(()=>{scSyncAccess();if(user&&window.__firebaseTeamSession===true)scOpenHome()},350);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)scSyncAccess()});
+})();
+</script>
 
 </body>
 </html>
