@@ -394,6 +394,49 @@ section{padding:64px 0}.section-head{display:flex;align-items:end;justify-conten
   }
 }
 </style>
+
+<style id="sc-v8410-non-following-chrome">
+/* V8.4.10 — Sidebar e barra account restano nella posizione iniziale della pagina e non seguono lo scroll */
+body.sc-portal .sc-private-sidebar{
+  position:absolute!important;
+  top:0!important;
+  left:0!important;
+  bottom:auto!important;
+  min-height:100vh!important;
+  height:auto!important;
+  max-height:none!important;
+  overflow:visible!important;
+}
+body.sc-portal .topbar{
+  position:relative!important;
+  top:auto!important;
+  left:0!important;
+  right:auto!important;
+  width:100%!important;
+  z-index:80!important;
+}
+/* La linea inferiore della barra arriva fino al bordo destro del contenuto */
+body.sc-portal .topbar::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:-1px;
+  height:1px;
+  background:rgba(77,214,255,.18);
+  pointer-events:none;
+}
+@media(max-width:980px){
+  body.sc-portal .sc-private-sidebar{
+    position:fixed!important;
+    top:0!important;
+    bottom:0!important;
+    height:100vh!important;
+    overflow:auto!important;
+  }
+  body.sc-portal .topbar{position:relative!important;left:0!important;width:100%!important;}
+}
+</style>
 </head>
 <body>
 
@@ -3148,5 +3191,138 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)scSyncAcce
 })();
 </script>
 
+
+<style id="sc-v8411-final-layout-fix">
+/* V8.4.11 — fix definitivo: niente doppio offset e barra superiore completa */
+@media (min-width:981px){
+  body.sc-portal .sc-private-sidebar{
+    position:absolute!important;
+    top:0!important;
+    left:0!important;
+    bottom:auto!important;
+    width:var(--sc-side)!important;
+    min-height:100vh!important;
+    height:auto!important;
+    max-height:none!important;
+    overflow:visible!important;
+  }
+
+  /* Le view hanno già margin-left: var(--sc-side).
+     Perciò la topbar NON deve ricevere un secondo left: var(--sc-side). */
+  body.sc-portal #publicView .topbar,
+  body.sc-portal #teamView .topbar,
+  body.sc-portal #spoilersView .topbar,
+  body.sc-portal #forumView .topbar,
+  body.sc-portal #rulesView .topbar,
+  body.sc-portal #dashboardView .topbar{
+    position:relative!important;
+    top:auto!important;
+    left:0!important;
+    right:auto!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    box-sizing:border-box!important;
+    z-index:80!important;
+  }
+
+  body.sc-portal .topbar .wrap.nav{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding-left:28px!important;
+    padding-right:28px!important;
+    box-sizing:border-box!important;
+  }
+
+  body.sc-portal .topbar::after{
+    content:"";
+    position:absolute;
+    left:0!important;
+    right:0!important;
+    bottom:-1px;
+    height:1px;
+    background:rgba(77,214,255,.22);
+    pointer-events:none;
+  }
+}
+
+@media (max-width:980px){
+  body.sc-portal .topbar{
+    position:relative!important;
+    left:0!important;
+    right:auto!important;
+    width:100%!important;
+    max-width:none!important;
+  }
+}
+</style>
+
+
+<style id="sc-v8412-chrome-fill-fix">
+/* V8.4.12 — riempimento visivo completo sidebar + fascia superiore, senza rendere i menu sticky */
+@media (min-width:981px){
+  /* Colonna sinistra: il CONTENUTO del menu resta nella sua posizione iniziale,
+     ma lo sfondo continua fino in fondo allo schermo/pagina così non si vede alcun taglio. */
+  body.sc-portal::before{
+    content:"";
+    position:fixed;
+    z-index:1;
+    left:0;
+    top:0;
+    bottom:0;
+    width:var(--sc-side);
+    background:#07131f;
+    border-right:1px solid var(--line);
+    pointer-events:none;
+  }
+  body.sc-portal .sc-private-sidebar{
+    z-index:9000!important;
+    background:#07131f!important;
+    border-right:1px solid var(--line)!important;
+  }
+
+  /* Fascia in alto: parte ESATTAMENTE dopo la sidebar e arriva fino al bordo destro. */
+  body.sc-portal #publicView .topbar,
+  body.sc-portal #teamView .topbar,
+  body.sc-portal #spoilersView .topbar,
+  body.sc-portal #forumView .topbar,
+  body.sc-portal #rulesView .topbar,
+  body.sc-portal #dashboardView .topbar{
+    background:#07131f!important;
+    border-bottom:1px solid rgba(77,214,255,.22)!important;
+    box-shadow:none!important;
+    overflow:visible!important;
+  }
+
+  /* Elimina qualsiasi effetto di barra "centrata/tagliata": tutto il contenitore interno usa il 100%. */
+  body.sc-portal .topbar .wrap,
+  body.sc-portal .topbar .wrap.nav,
+  body.sc-portal .topbar .nav{
+    width:100%!important;
+    max-width:none!important;
+    margin-left:0!important;
+    margin-right:0!important;
+    box-sizing:border-box!important;
+  }
+
+  /* Riempie anche l'eventuale vuoto sopra/sotto il box account, fino ai bordi della fascia. */
+  body.sc-portal .topbar::before{
+    content:"";
+    position:absolute;
+    z-index:-1;
+    inset:0;
+    background:#07131f;
+    pointer-events:none;
+  }
+
+  body.sc-portal .topbar::after{
+    left:0!important;
+    right:0!important;
+    width:auto!important;
+    background:rgba(77,214,255,.22)!important;
+  }
+}
+</style>
 </body>
 </html>
