@@ -477,7 +477,25 @@ const SESSION='schoolcraft_session_v4';
 const AUTH_USERS={
   'ziofede82':{email:'ziofede82@schoolcraft.local'},
   'Alessia':{email:'alessia@schoolcraft.local'},
-  '26kmanuu':{email:'26kmanuu@schoolcraft.local'}
+  '26kmanuu':{email:'26kmanuu@schoolcraft.local'},
+  'TestTeam':{email:'testteam@schoolcraft.local'},
+  'Giorgia':{email:'Giorgia@schoolcraft.local'},
+  'Carmine':{email:'Carmine@schoolcraft.local'},
+  'Valentina':{email:'Valentina@schoolcraft.local'},
+  'CriBanana':{email:'CriBanana@schoolcraft.local'},
+  'Elena':{email:'Elena@schoolcraft.local'},
+  'OnePlus':{email:'OnePlus@schoolcraft.local'},
+  'Eviler':{email:'Eviler@schoolcraft.local'},
+  'Mandalorian':{email:'Mandalorian@schoolcraft.local'},
+  'Television':{email:'Television@schoolcraft.local'},
+  'Pixo':{email:'Pixo@schoolcraft.local'},
+  'Fragola':{email:'Fragola@schoolcraft.local'},
+  'Greta':{email:'Greta@schoolcraft.local'},
+  'Sky':{email:'Sky@schoolcraft.local'},
+  'Devil':{email:'Devil@schoolcraft.local'},
+  'Dani':{email:'Dani@schoolcraft.local'},
+  'Fefe':{email:'Fefe@schoolcraft.local'},
+  'Gabby':{email:'Gabby@schoolcraft.local'}
 };
 const FIREBASE_CONFIG={
   apiKey:'AIzaSyBs1edP3ddDyfLPuV3ZZP3bRwRGZZpZ6lA',
@@ -882,9 +900,13 @@ async function login(){
     return;
   }
 
-  // Compatibilità: "ziofede82" -> ziofede82@schoolcraft.local.
-  // È possibile anche usare direttamente una e-mail Firebase.
-  const email=n.includes('@') ? n.toLowerCase() : `${n.toLowerCase().replace(/\s+/g,'')}@schoolcraft.local`;
+  // V8.4.7: accesso sia con e-mail completa sia con nome utente.
+  // Per i membri registrati usiamo una rubrica locale di sole e-mail (mai password),
+  // così il nome digitato viene collegato esattamente all'account Firebase corretto.
+  const authKey=Object.keys(AUTH_USERS).find(k=>k.toLowerCase()===n.toLowerCase());
+  const email=n.includes('@')
+    ? n.trim()
+    : (authKey ? AUTH_USERS[authKey].email : `${n.trim().replace(/\s+/g,'')}@schoolcraft.local`);
 
   const loginBtn=document.querySelector('#loginModal .btn.primary');
   if(loginBtn){loginBtn.disabled=true;loginBtn.textContent='Verifica account...'}
@@ -946,7 +968,7 @@ function accountHTML(id){
     <button onclick="scOpenProfile?.()">👤 Il mio profilo</button>
     <button onclick="scOpenNotifications?.()">🔔 Notifiche</button>
     <button onclick="scOpenSettings?.()">⚙ Impostazioni</button>
-    ${admin?`<button onclick="enterDashboard()">▣ Pannello Staff</button><button onclick="showTeamAdmin()">♟ Gestisci Team</button>`:''}
+    ${admin?`<button onclick="enterDashboard()">▣ Pannello Staff</button><button onclick="showTeamAdmin()">♟ Gestione membri</button>`:''}
     <button onclick="logout()" style="color:#ffd1d8">↪ Esci</button>
   </div></div>`;
 }
@@ -2999,7 +3021,9 @@ window.scRenderHome=function(){
   const n=events[0];
   document.getElementById('scNextEvent').innerHTML=n?`<div class="sc-next-event"><div class="date">${fmtDate(n.date)}</div><h3>${esc(n.title||'Registrazione')}</h3><p class="muted" style="font-size:.72rem;line-height:1.55">${esc(n.description||'Attività programmata dal Team.')}</p><button class="btn small primary" onclick="scOpenPublicSection('calendario')">Apri calendario</button></div>`:'<div class="empty">Nessun impegno programmato.</div>';
 
-  document.getElementById('scAdminNav').innerHTML=isAdmin()?`<div class="sc-nav-section">Amministrazione</div><button onclick="enterDashboard();scSetActive('admin')">▣ Pannello Staff</button><button onclick="showTeamAdmin();scSetActive('manage')">♟ Gestione Team</button>`:'';
+  // V8.4.7: niente voci amministrative nella barra laterale.
+  // Owner/Admin accedono a Pannello Staff e Gestione membri esclusivamente dal menu del proprio account.
+  document.getElementById('scAdminNav').innerHTML='';
 }
 window.scSyncAccess=function(){
   const gate=document.getElementById('scAccessGate');
